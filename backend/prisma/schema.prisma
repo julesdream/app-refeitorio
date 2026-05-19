@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRoles {
+  SERVIDOR
+  ALUNO
+}
+
+enum MealTypes {
+  CAFE
+  ALMOCO
+  JANTAR
+}
+
+model User {
+  id    Int       @id @default(autoincrement())
+  name  String
+  email String    @unique
+  password String
+  role UserRoles @default(ALUNO)
+}
+
+model Menu {
+  id Int @id @default(autoincrement())
+  date DateTime @db.Date @unique
+  meals Meal[]
+}
+
+model Meal {
+  menuId Int
+  type MealTypes
+
+  menu Menu @relation(fields: [menuId], references: [id])
+  items MealItem[]
+
+  @@id([menuId, type])
+}
+
+model MealItem {
+  id Int @id @default(autoincrement())
+  name String
+  
+  menuId Int
+  mealType MealTypes
+
+  meal Meal @relation(fields: [menuId, mealType], references: [menuId, type])
+}
