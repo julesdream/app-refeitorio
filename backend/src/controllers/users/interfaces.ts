@@ -4,16 +4,17 @@ import { User } from "../../generated/prisma/client";
 
 export interface IUserRepository {
   findAll(): Promise<Result<User[]>>;
-  findById(id: string): Promise<Result<User | null>>;
+  findById(id: number): Promise<Result<User | null>>;
+  findyByEmail(email: string): Promise<Result<User | null>>;
   create(user: Omit<User, "id">): Promise<Result<User>>;
-  update(id: string, user: Partial<User>): Promise<Result<User>>;
-  delete(id: string): Promise<Result<void>>;
+  update(id: number, user: Partial<User>): Promise<Result<User>>;
+  delete(id: number): Promise<Result<void>>;
 }
 
 export interface IUserController {
   getAllUsers(): Promise<HttpResponse<Omit<User, "password">[]>>;
-  getUserById(id: string): Promise<HttpResponse<Omit<User, "password"> | null>>;
+  getUserById(id: number): Promise<HttpResponse<Omit<User, "password"> | null>>;
   createUser(user: Omit<User, "id">): Promise<HttpResponse<User>>;
-  updateUser(id: string, user: Partial<User>): Promise<HttpResponse<User>>;
-  deleteUser(id: string): Promise<HttpResponse<void>>;
+  updateUser(id: number, user: Partial<User>): Promise<HttpResponse<User>>;
+  deleteUser(id: number): Promise<HttpResponse<void>>;
 }

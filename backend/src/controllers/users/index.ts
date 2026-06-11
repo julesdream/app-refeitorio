@@ -13,7 +13,7 @@ export class UserController implements IUserController {
   }
 
   async getUserById(
-    id: string,
+    id: number,
   ): Promise<HttpResponse<Omit<User, "password"> | null>> {
     const result = await this.userRepository.findById(id);
 
@@ -32,7 +32,7 @@ export class UserController implements IUserController {
   }
 
   async updateUser(
-    id: string,
+    id: number,
     user: Omit<User, "id">,
   ): Promise<HttpResponse<User>> {
     let updateUser = user;
@@ -48,7 +48,7 @@ export class UserController implements IUserController {
     return toHttpResponse(result);
   }
 
-  async deleteUser(id: string): Promise<HttpResponse<void>> {
+  async deleteUser(id: number): Promise<HttpResponse<void>> {
     const result = await this.userRepository.delete(id);
 
     return toHttpResponse(result);
