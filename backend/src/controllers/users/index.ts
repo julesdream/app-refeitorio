@@ -1,13 +1,18 @@
 import { toHttpResponse, type HttpResponse } from "../../core/http-response";
 import { User } from "../../generated/prisma/client";
+import { UserRepository } from "../../repositories/user-repository";
 import type { IUserController, IUserRepository } from "./interfaces.js";
 import bcrypt from "bcrypt";
 
 export class UserController implements IUserController {
-  constructor(private readonly userRepository: IUserRepository) {}
+  private readonly _userRepository: IUserRepository;
+
+  constructor() {
+    this._userRepository = new UserRepository();
+  }
 
   async getAllUsers(): Promise<HttpResponse<Omit<User, "password">[]>> {
-    const result = await this.userRepository.findAll();
+    const result = await this._userRepository.findAll();
 
     return toHttpResponse(result);
   }
@@ -15,7 +20,7 @@ export class UserController implements IUserController {
   async getUserById(
     id: number,
   ): Promise<HttpResponse<Omit<User, "password"> | null>> {
-    const result = await this.userRepository.findById(id);
+    const result = await this._userRepository.findById(id);
 
     return toHttpResponse(result);
   }
@@ -23,7 +28,7 @@ export class UserController implements IUserController {
   async createUser(user: Omit<User, "id">): Promise<HttpResponse<User>> {
     const { password, ...rest } = user;
     const hash = await bcrypt.hash(password, 10);
-    const result = await this.userRepository.create({
+    const result = await this._userRepository.create({
       password: hash,
       ...rest,
     });
@@ -43,13 +48,13 @@ export class UserController implements IUserController {
       updateUser = { password: hash, ...rest };
     }
 
-    const result = await this.userRepository.update(id, updateUser);
+    const result = await this._userRepository.update(id, updateUser);
 
     return toHttpResponse(result);
   }
 
   async deleteUser(id: number): Promise<HttpResponse<void>> {
-    const result = await this.userRepository.delete(id);
+    const result = await this._userRepository.delete(id);
 
     return toHttpResponse(result);
   }

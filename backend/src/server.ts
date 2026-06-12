@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { connectDB } from "./database";
+import { router } from "./routes";
 
 async function main() {
   await connectDB();
@@ -9,6 +10,7 @@ async function main() {
 
   server.use(cors());
   server.use(express.json());
+  server.use("/api/v1", router);
 
   const PORT = process.env.PORT || 3001;
 
