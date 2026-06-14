@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext } from 'react';
+import api from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Definição do tipo de usuário conforme os requisitos
 interface User {
   login: string;
   tipo: 'aluno' | 'servidor';
@@ -20,21 +21,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAuthenticated = !!user;
 
-  const login = (email: string, pass: string) => {
-    // Simulação de base de dados para teste
-    const mockUsers = [
-      { login: 'aluno@if.com', pwd: '123', tipo: 'aluno' },
-      { login: 'servidor@if.com', pwd: '123', tipo: 'servidor' }
-    ];
+  async function login(email: string, password: string) {
+    try {
+      const response = await api.post('/auth/login', { email, password });
 
-    const foundUser = mockUsers.find(u => u.login === email && u.pwd === pass);
+      const { user, token } = response.data;
 
-    if (foundUser) {
-      setUser({ login: foundUser.login, tipo: foundUser.tipo as 'aluno' | 'servidor' });
-    } else {
-      alert("Credenciais inválidas! Tente aluno@if.com / 123");
+      await AsyncStorage.setItem('@AppRefeitorio:token', token);
+      await AsyncStorage.setItem('@AppRefeitorio:user', JSON.stringify(user));
+
+      setUser(user);
+
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      throw error; 
     }
-  };
+  }
 
   const logout = () => setUser(null);
 

@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { useAuth } from '../src/contexts/AuthContext';
-import { Redirect } from 'expo-router';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useAuth } from "../src/contexts/AuthContext";
+import { Redirect } from "expo-router";
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const { login, isAuthenticated } = useAuth();
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      alert("Por favor, preencha o e-mail e a senha.");
+      return;
+    }
+
+    try {
+      await login(email, password);
+    } catch (error: any) {
+      alert("Usuário ou senha incorretos.");
+    }
+  };
 
   // Se já estiver logado, redireciona para as funcionalidades (menu/tabs)
   if (isAuthenticated) {
@@ -14,23 +35,23 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={s.container}
     >
       <View style={s.inner}>
         <Text style={s.title}>Refeitório Digital</Text>
         <Text style={s.subtitle}>Acesse o cardápio da semana</Text>
 
-        <TextInput 
+        <TextInput
           style={s.input}
-          placeholder="E-mail ou Login"
+          placeholder="E-mail"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
         />
 
-        <TextInput 
+        <TextInput
           style={s.input}
           placeholder="Senha"
           value={password}
@@ -38,10 +59,10 @@ export default function LoginScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={s.button} onPress={() => login(email, password)}>
+        <TouchableOpacity style={s.button} onPress={handleLogin}>
           <Text style={s.buttonText}>Entrar</Text>
         </TouchableOpacity>
-        
+
         <Text style={s.footer}>Análise e Desenvolvimento de Sistemas 2026</Text>
       </View>
     </KeyboardAvoidingView>
@@ -51,49 +72,49 @@ export default function LoginScreen() {
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   inner: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 30,
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2e7d32',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#2e7d32",
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
     marginBottom: 40,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 15,
     borderRadius: 10,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   button: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: "#2e7d32",
     padding: 18,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   footer: {
     marginTop: 50,
-    textAlign: 'center',
-    color: '#aaa',
+    textAlign: "center",
+    color: "#aaa",
     fontSize: 12,
-  }
+  },
 });
