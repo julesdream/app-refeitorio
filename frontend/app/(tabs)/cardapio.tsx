@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   NativeScrollEvent,
   Platform,
   StatusBar,
+  Share,
 } from "react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ──────────────────────────────────────────────
 // Breakpoint
@@ -31,8 +33,8 @@ const COL_GAP_DSK   = 14;
 
 // Espaçamentos e alturas estimadas
 const MOB_PADDING_TOP   = Platform.OS === "android" ? 40 : 52;
-const MOB_DAY_HEADER_H  = 52;  // "Segunda-feira / 25/05"
-const MOB_GAP_H         = 8;   // gap entre almoço e jantar
+const MOB_DAY_HEADER_H  = 52;
+const MOB_GAP_H         = 8;
 
 // ──────────────────────────────────────────────
 // Paleta
@@ -95,22 +97,96 @@ const cardapioSemana = [
 // Card de refeição
 // ──────────────────────────────────────────────
 function CardRefeicao({
-  tipo, icone, itens, isHoje, isAlmoco, estiloExtra,
+  tipo, icone, itens, isHoje, isAlmoco, estiloExtra, diaSemana
 }: {
   tipo: string; icone: "wb-sunny" | "nights-stay";
-  itens: string[]; isHoje: boolean; isAlmoco: boolean; estiloExtra?: any;
+  itens: string[]; isHoje: boolean; isAlmoco: boolean; estiloExtra?: any; diaSemana: string;
 }) {
   const cor = isAlmoco ? LARANJA : VERDE_MID;
   const bg  = isHoje ? (isAlmoco ? LARANJA_SOFT : VERDE_PALE) : CINZA_CARD;
+
+  // ── ESTADOS ──
+  const [isFavorito, setIsFavorito] = useState(false);
+  const storageKey = `@fav_${diaSemana}_${tipo}`;
+
+  useEffect(() => {
+    async function carregarFavorito() {
+      const salvo = await AsyncStorage.getItem(storageKey);
+      if (salvo === 'true') {
+        setIsFavorito(true);
+      }
+    }
+    carregarFavorito();
+  }, [storageKey]);
+
+  // ── FUNÇÃO DE FAVORITAR ──
+  const lidarComFavorito = async () => {
+    const novoEstado = !isFavorito;
+    setIsFavorito(novoEstado);
+    if (novoEstado) {
+      await AsyncStorage.setItem(storageKey, 'true');
+    } else {
+      await AsyncStorage.removeItem(storageKey);
+    }
+  };
+
+  // ── FUNÇÃO DE COMPARTILHAR ──
+  const lidarComCompartilhamento = async () => {
+    try {
+      const listaFormatada = itens.map(item => `• ${item}`).join('\n');
+      
+      const mensagemTexto = `🍽️ *Cardápio do Refeitório*\n\n📅 ${diaSemana}\n🍲 ${tipo}\n\n${listaFormatada}`;
+
+      if (Platform.OS === 'web') {
+        // No PC (Web), copiamos o texto para a área de transferência
+        navigator.clipboard.writeText(mensagemTexto);
+        alert("Copiado! 📋\n\nO cardápio foi copiado. Agora é só colar (Ctrl+V) no WhatsApp Web ou onde quiser!");
+      } else {
+        // No celular (Android/iOS), abre a tela nativa de compartilhamento
+        await Share.share({
+          message: mensagemTexto,
+          title: `Cardápio de ${diaSemana}`
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao tentar compartilhar:", error);
+    }
+  };
   
   return (
     <View style={[s.card, { backgroundColor: bg }, estiloExtra, isHoje && s.cardDestaque]}>
       <View style={[s.cardStripe, { backgroundColor: cor }]} />
       <View style={s.cardInner}>
-        <View style={s.refHeader}>
-          <MaterialIcons name={icone} size={14} color={cor} />
-          <Text style={[s.refTipo, { color: cor }]}>{tipo}</Text>
+        
+        {/* Cabeçalho do Card */}
+        <View style={[s.refHeader, { justifyContent: 'space-between' }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <MaterialIcons name={icone} size={14} color={cor} />
+            <Text style={[s.refTipo, { color: cor }]}>{tipo}</Text>
+          </View>
+
+          {/* 👈 ENVELOPE COM OS DOIS BOTÕES */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            {/* Botão de Compartilhar */}
+            <TouchableOpacity onPress={lidarComCompartilhamento} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <MaterialIcons 
+                name="share" 
+                size={18} 
+                color={TEXTO_SUAVE} 
+              />
+            </TouchableOpacity>
+
+            {/* Botão de Favoritar */}
+            <TouchableOpacity onPress={lidarComFavorito} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <MaterialIcons 
+                name={isFavorito ? "favorite" : "favorite-border"} 
+                size={18} 
+                color={isFavorito ? "#ff5252" : TEXTO_SUAVE} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
+
         <View style={s.divisor} />
         {itens.map((item, i) => (
           <View key={i} style={s.itemRow}>
@@ -141,7 +217,10 @@ export default function CardapioScreen() {
   const SNAP_INTERVAL = CARD_W_MOB + CARD_GAP_MOB;
   const COL_W_DSK = (width - PADDING_H_DSK * 2 - COL_GAP_DSK * 4) / 5;
 
-  const lidarComLogout = () => { logout(); router.replace("/"); };
+  const lidarComLogout = async () => { 
+  await logout(); 
+  router.replace("/"); 
+};
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const pagina = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
@@ -208,12 +287,14 @@ export default function CardapioScreen() {
                   tipo={almoco.tipo} icone={almoco.icone} itens={almoco.itens} 
                   isHoje={isHoje} isAlmoco 
                   estiloExtra={{ minHeight: 180, flex: 1 }} 
+                  diaSemana={dia.diaSemana}
                 />
                 <View style={{ height: 10 }} />
                 <CardRefeicao 
                   tipo={jantar.tipo} icone={jantar.icone} itens={jantar.itens} 
                   isHoje={isHoje} isAlmoco={false} 
                   estiloExtra={{ minHeight: 180, flex: 1 }} 
+                  diaSemana={dia.diaSemana}
                 />
               </View>
             );
@@ -300,12 +381,14 @@ export default function CardapioScreen() {
                 tipo={almoco.tipo} icone={almoco.icone} itens={almoco.itens} 
                 isHoje={isHoje} isAlmoco 
                 estiloExtra={{ minHeight: 150 }} 
+                diaSemana={dia.diaSemana}
               />
               <View style={{ height: MOB_GAP_H }} />
               <CardRefeicao 
                 tipo={jantar.tipo} icone={jantar.icone} itens={jantar.itens} 
                 isHoje={isHoje} isAlmoco={false} 
                 estiloExtra={{ minHeight: 150 }} 
+                diaSemana={dia.diaSemana}
               />
             </ScrollView>
           );
