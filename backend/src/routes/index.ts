@@ -4,6 +4,7 @@ import { userRouter } from "./user";
 import { authRouter } from "./auth";
 import { menuRouter } from "./menu";
 import { authMiddleware } from "../middlewares/auth-middleware";
+import { docsRouter } from "./docs";
 
 export const router = Router();
 
