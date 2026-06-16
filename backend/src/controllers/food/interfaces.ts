@@ -11,8 +11,8 @@ export interface IFoodRepository {
 }
 
 export interface IFoodController {
-  getAllFoods(): Promise<HttpResponse<Omit<Food, "password">[]>>;
-  getFoodById(id: number): Promise<HttpResponse<Omit<Food, "password"> | null>>;
+  getAllFoods(): Promise<HttpResponse<Food[]>>;
+  getFoodById(id: number): Promise<HttpResponse<Food | null>>;
   createFood(food: Omit<Food, "id">): Promise<HttpResponse<Food>>;
   updateFood(id: number, user: Partial<Food>): Promise<HttpResponse<Food>>;
   deleteFood(id: number): Promise<HttpResponse<void>>;

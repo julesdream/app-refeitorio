@@ -36,7 +36,7 @@ model Meal {
   menuId Int
   type MealTypes
 
-  menu Menu @relation(fields: [menuId], references: [id])
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
   items MealItem[]
 
   @@id([menuId, type])
@@ -44,7 +44,6 @@ model Meal {
 
 model MealItem {
   id Int @id @default(autoincrement())
-  name String
   
   menuId Int
   mealType MealTypes
@@ -52,7 +51,9 @@ model MealItem {
   foodId Int
   food Food @relation(fields: [foodId], references: [id])
 
-  meal Meal @relation(fields: [menuId, mealType], references: [menuId, type])
+  meal Meal @relation(fields: [menuId, mealType], references: [menuId, type], onDelete: Cascade)
+
+  @@unique([menuId, mealType, foodId])
 }
 
 model Food {

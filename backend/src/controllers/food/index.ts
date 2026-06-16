@@ -10,7 +10,7 @@ export class FoodController implements IFoodController {
     this._foodRepository = new FoodRepository();
   }
 
-  async getAllFoods(): Promise<HttpResponse<Omit<Food, "password">[]>> {
+  async getAllFoods(): Promise<HttpResponse<Food[]>> {
     const result = await this._foodRepository.findAll();
 
     return toHttpResponse(result);
@@ -18,7 +18,7 @@ export class FoodController implements IFoodController {
 
   async getFoodById(
     id: number,
-  ): Promise<HttpResponse<Omit<Food, "password"> | null>> {
+  ): Promise<HttpResponse<Food | null>> {
     const result = await this._foodRepository.findById(id);
 
     return toHttpResponse(result);

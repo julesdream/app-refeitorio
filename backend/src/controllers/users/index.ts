@@ -1,7 +1,11 @@
 import { toHttpResponse, type HttpResponse } from "../../core/http-response";
 import { User } from "../../generated/prisma/client";
 import { UserRepository } from "../../repositories/user-repository";
-import type { IUserController, IUserRepository } from "./interfaces.js";
+import type {
+  IUserController,
+  IUserRepository,
+  UserWithoutPassword,
+} from "./interfaces.js";
 import bcrypt from "bcrypt";
 
 export class UserController implements IUserController {
@@ -11,7 +15,7 @@ export class UserController implements IUserController {
     this._userRepository = new UserRepository();
   }
 
-  async getAllUsers(): Promise<HttpResponse<Omit<User, "password">[]>> {
+  async getAllUsers(): Promise<HttpResponse<UserWithoutPassword[]>> {
     const result = await this._userRepository.findAll();
 
     return toHttpResponse(result);
@@ -19,13 +23,15 @@ export class UserController implements IUserController {
 
   async getUserById(
     id: number,
-  ): Promise<HttpResponse<Omit<User, "password"> | null>> {
+  ): Promise<HttpResponse<UserWithoutPassword | null>> {
     const result = await this._userRepository.findById(id);
 
     return toHttpResponse(result);
   }
 
-  async createUser(user: Omit<User, "id">): Promise<HttpResponse<User>> {
+  async createUser(
+    user: Omit<User, "id">,
+  ): Promise<HttpResponse<UserWithoutPassword>> {
     const { password, ...rest } = user;
     const hash = await bcrypt.hash(password, 10);
     const result = await this._userRepository.create({
@@ -39,7 +45,7 @@ export class UserController implements IUserController {
   async updateUser(
     id: number,
     user: Omit<User, "id">,
-  ): Promise<HttpResponse<User>> {
+  ): Promise<HttpResponse<UserWithoutPassword>> {
     let updateUser = user;
 
     if ("password" in user) {
