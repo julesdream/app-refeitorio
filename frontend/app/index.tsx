@@ -7,9 +7,20 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  ScrollView,
 } from "react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { Redirect } from "expo-router";
+import { Shadow } from "react-native-shadow-2";
+
+// ──────────────────────────────────────────────
+// Paleta
+// ──────────────────────────────────────────────
+const VERDE_DARK = "#1e6e24";
+const VERDE_MID = "#2e7d32";
+const TEXTO_FORTE = "#1a1a1a";
+const TEXTO_SUAVE = "#8a9a8a";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -21,7 +32,6 @@ export default function LoginScreen() {
       alert("Por favor, preencha o e-mail e a senha.");
       return;
     }
-
     try {
       await login(email, password);
     } catch (error: any) {
@@ -29,7 +39,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Se já estiver logado, redireciona para as funcionalidades (menu/tabs)
   if (isAuthenticated) {
     return <Redirect href="/(tabs)/menu" />;
   }
@@ -39,82 +48,177 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={s.container}
     >
-      <View style={s.inner}>
-        <Text style={s.title}>Refeitório Digital</Text>
-        <Text style={s.subtitle}>Acesse o cardápio da semana</Text>
+      <Image
+        source={require("../assets/images/logo-ifrs-watermark.png")}
+        style={s.decorWatermark}
+        resizeMode="contain"
+        blurRadius={8}
+      />
 
-        <TextInput
-          style={s.input}
-          placeholder="E-mail"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-        />
+      <ScrollView
+        contentContainerStyle={s.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Cabeçalho ── */}
+        <View style={s.headerWrap}>
+          <Text style={s.title}>REFEITÓRIO{"\n"}IFRS</Text>
+          <Text style={s.subtitle}>CAMPUS BENTO GONÇALVES</Text>
+        </View>
 
-        <TextInput
-          style={s.input}
-          placeholder="Senha"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        {/* ── Card de Login ── */}
+        <Shadow
+          distance={1}
+          startColor="#00000015"
+          offset={[0, 6]}
+          style={{ width: "100%", borderRadius: 16 }}
+          containerStyle={{ width: "100%", marginTop: 80 }}
+        >
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Entre com sua conta</Text>
 
-        <TouchableOpacity style={s.button} onPress={handleLogin}>
-          <Text style={s.buttonText}>Entrar</Text>
-        </TouchableOpacity>
+            <TextInput
+              style={s.input}
+              placeholder="E-mail"
+              placeholderTextColor={TEXTO_SUAVE}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={s.input}
+              placeholder="Senha"
+              placeholderTextColor={TEXTO_SUAVE}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-        <Text style={s.footer}>Análise e Desenvolvimento de Sistemas 2026</Text>
-      </View>
+            <Shadow
+              distance={1}
+              startColor="#52525256"
+              offset={[0, 3]}
+              style={{ width: "100%", borderRadius: 10 }}
+              containerStyle={{ width: "100%", marginTop: 6 }}
+            >
+              <TouchableOpacity
+                style={s.button}
+                onPress={handleLogin}
+                activeOpacity={0.85}
+              >
+                <Text style={s.buttonText}>Continuar</Text>
+              </TouchableOpacity>
+            </Shadow>
+          </View>
+        </Shadow>
+
+        {/* ── Espaçador Flexível ── */}
+        <View style={{ flex: 1, minHeight: 40 }} />
+
+        {/* ── Rodapé ── */}
+        <View style={s.footerWrap}>
+          <Image
+            source={require("../assets/images/logo-ifrs.png")}
+            style={s.logoFooter}
+            resizeMode="contain"
+          />
+          <Text style={s.footer}>
+            Análise e Desenvolvimento de Sistemas{" "}
+            <Text style={{ color: VERDE_MID }}>2026</Text>
+          </Text>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// ──────────────────────────────────────────────
+// Estilos
+// ──────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  inner: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 30,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+    paddingTop: 100,
+  },
+  decorWatermark: {
+    position: "absolute",
+    bottom: "22%",
+    right: -160,
+    width: 480,
+    height: 480,
+    opacity: 0.7,
+  },
+  headerWrap: {
+    marginBottom: 60,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#2e7d32",
-    textAlign: "center",
+    fontSize: 52,
+    fontFamily: "InterBlack",
+    color: VERDE_DARK,
+    lineHeight: 40,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: 13,
+    fontFamily: "InterSemiBold",
+    color: TEXTO_FORTE,
+    marginTop: 6,
+    letterSpacing: 0.3,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 22,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontFamily: "InterRegular",
+    color: TEXTO_FORTE,
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 16,
   },
   input: {
-    backgroundColor: "#fff",
-    padding: 15,
+    backgroundColor: "#fafafa",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 10,
-    marginBottom: 15,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e0e0e0",
+    fontSize: 14,
+    color: TEXTO_FORTE,
   },
   button: {
-    backgroundColor: "#2e7d32",
-    padding: 18,
+    backgroundColor: VERDE_MID,
+    paddingVertical: 15,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 10,
   },
   buttonText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontFamily: "InterSemiBold",
+  },
+  footerWrap: {
+    alignItems: "center",
+    paddingVertical: 20,
+    backgroundColor: "transparent",
+  },
+  logoFooter: {
+    width: 240,
+    height: 80,
+    marginBottom: 2,
   },
   footer: {
-    marginTop: 50,
     textAlign: "center",
-    color: "#aaa",
+    color: "#666",
     fontSize: 12,
+    fontFamily: "InterBold",
   },
 });
