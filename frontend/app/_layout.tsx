@@ -10,6 +10,7 @@ import {
 } from "@expo-google-fonts/inter";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import React from "react";
 
 // Mantém a tela de splash visível até as fontes carregarem
 SplashScreen.preventAutoHideAsync();
