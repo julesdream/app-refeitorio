@@ -1,4 +1,10 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -12,178 +18,266 @@ import {
   StatusBar,
   Share,
   Image,
+  ActivityIndicator,
+  StyleProp,
+  TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Shadow } from "react-native-shadow-2";
+import api from "../../src/services/api";
 
 // ──────────────────────────────────────────────
-// Layout e Cores
+// CONSTANTS
 // ──────────────────────────────────────────────
 const PADDING_H_MOB = 20;
 const CARD_GAP_MOB = 16;
 const CARD_PEEK = 30;
 
-const VERDE_DARK = "#1b5e20";
-const VERDE_MID = "#2e7d32";
-const DESTAQUE_HOJE = "#e65100";
-const TEXTO_FORTE = "#333";
-const CINZA_INATIVO = "#a9aba9";
-const CINZA_BG_CARD = "#e9e9e9";
-const CINZA_LINHA = "#cccccc";
+const COLORS = {
+  verde_dark: "#1b5e20",
+  verde_mid: "#2e7d32",
+  destaque_hoje: "#e65100",
+  texto_forte: "#333",
+  cinza_inativo: "#a9aba9",
+  cinza_bg_card: "#e9e9e9",
+  cinza_linha: "#cccccc",
+  branco: "#fff",
+} as const;
+
+const DIAS_SEMANA = [
+  "Domingo",
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+] as const;
+
+const TIPO_REFEICAO = {
+  almoco: "Almoço",
+  janta: "Jantar",
+} as const;
 
 // ──────────────────────────────────────────────
-// Dados
+// TYPES
 // ──────────────────────────────────────────────
-const cardapioSemana = [
-  {
-    id: 1,
-    diaSemana: "Segunda-feira",
-    nomeCurto: "Segunda",
-    data: "25/05",
-    almoco: [
-      "Arroz branco / parboilizado",
-      "Feijão preto",
-      "Iscas de carne bovina",
-      "Polenta frita",
-      "Salada de alface e tomate",
-    ],
-    janta: [
-      "Arroz branco / parboilizado",
-      "Feijão preto",
-      "Cachorro quente",
-      "Batata palha",
-      "Salada mista",
-    ],
-  },
-  {
-    id: 2,
-    diaSemana: "Terça-feira",
-    nomeCurto: "Terça",
-    data: "26/05",
-    almoco: [
-      "Arroz/Lentilha",
-      "Frango frescor da capuchinha",
-      "Mandioquinha cozida com tempero verde",
-      "Saladas/Sobremesa",
-    ],
-    janta: [
-      "Arroz/Lentilha",
-      "Frango frescor da capuchinha",
-      "Mandioquinha cozida com tempero verde",
-      "Saladas/Sobremesa",
-    ],
-  },
-  {
-    id: 3,
-    diaSemana: "Quarta-feira",
-    nomeCurto: "Quarta",
-    data: "27/05",
-    almoco: [
-      "Arroz/Lentilha",
-      "Strogonoff de frango",
-      "Batata palha",
-      "Saladas/Sobremesa",
-    ],
-    janta: [
-      "Sopa de agnolini",
-      "Pão francês",
-      "Queijo ralado",
-      "Fruta da estação",
-    ],
-  },
-  {
-    id: 4,
-    diaSemana: "Quinta-feira",
-    nomeCurto: "Quinta",
-    data: "28/05",
-    almoco: [
-      "Arroz branco / parboilizado",
-      "Lentilha",
-      "Bife suíno acebolado",
-      "Massa alho e óleo",
-      "Salada de tomate",
-    ],
-    janta: [
-      "Arroz de forno com frios",
-      "Salada mista",
-      "Ovos cozidos",
-      "Fruta da estação",
-    ],
-  },
-  {
-    id: 5,
-    diaSemana: "Sexta-feira",
-    nomeCurto: "Sexta",
-    data: "29/05",
-    almoco: [
-      "Arroz branco",
-      "Feijão preto",
-      "Peixe empanado",
-      "Purê de batatas",
-      "Salada de folhas verdes",
-    ],
-    janta: ["Pizza de calabresa e queijo", "Suco natural", "Sobremesa doce"],
-  },
-];
+type TipoRefeicao = keyof typeof TIPO_REFEICAO;
+
+interface CardapioDia {
+  diaSemana: string;
+  nomeCurto: string;
+  data: string;
+  dataFormatada: string;
+  almoco: string[];
+  janta: string[];
+}
+
+interface APIFoodItem {
+  date: string;
+  type: "Almoço" | "Jantar";
+  name: string;
+}
 
 // ──────────────────────────────────────────────
-// Componente do Card do Dia Inteiro
+// CUSTOM HOOKS
 // ──────────────────────────────────────────────
-function CardDia({ dia, width, isHoje }: { dia: any; width: number; isHoje: boolean }) {
-  const [favAlmoco, setFavAlmoco] = useState(false);
-  const [favJanta, setFavJanta] = useState(false);
-
-  const keyAlmoco = `@fav_${dia.diaSemana}_almoco`;
-  const keyJanta = `@fav_${dia.diaSemana}_janta`;
+function useFavoritoRefeicao(diaSemana: string, tipo: TipoRefeicao) {
+  const [isFav, setIsFav] = useState(false);
+  const key = `@fav_${diaSemana}_${tipo}`;
 
   useEffect(() => {
-    async function carregarFavs() {
-      const a = await AsyncStorage.getItem(keyAlmoco);
-      const j = await AsyncStorage.getItem(keyJanta);
-      if (a === "true") setFavAlmoco(true);
-      if (j === "true") setFavJanta(true);
+    async function carregarFav() {
+      try {
+        const valor = await AsyncStorage.getItem(key);
+        setIsFav(valor === "true");
+      } catch {
+        setIsFav(false);
+      }
     }
-    carregarFavs();
-  }, [dia.diaSemana]);
+    carregarFav();
+  }, [diaSemana, key]);
 
-  const toggleFav = async (tipo: "almoco" | "janta") => {
-    const isAlmoco = tipo === "almoco";
-    const novoValor = isAlmoco ? !favAlmoco : !favJanta;
-    const key = isAlmoco ? keyAlmoco : keyJanta;
+  const toggle = useCallback(async () => {
+    const novoValor = !isFav;
+    setIsFav(novoValor);
 
-    if (isAlmoco) setFavAlmoco(novoValor);
-    else setFavJanta(novoValor);
+    try {
+      if (novoValor) {
+        await AsyncStorage.setItem(key, "true");
+      } else {
+        await AsyncStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isFav, key]);
 
-    if (novoValor) await AsyncStorage.setItem(key, "true");
-    else await AsyncStorage.removeItem(key);
-  };
+  return [isFav, toggle] as const;
+}
 
-  const compartilhar = async (tipo: "Almoço" | "Janta", itens: string[]) => {
+// ──────────────────────────────────────────────
+// UTILITY FUNCTIONS
+// ──────────────────────────────────────────────
+function parseDataParaDate(dataStr: string): Date {
+  const [dia, mes, ano] = dataStr.split("/").map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
+function formatarDataISO(date: Date) {
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+
+  return `${ano}-${mes}-${dia}`;
+}
+
+function obterHojeISO(): string {
+  return formatarDataISO(new Date());
+}
+
+function agruparCardapiosPorDia(
+  items: APIFoodItem[],
+): Record<string, CardapioDia> {
+  return items.reduce(
+    (acc, item) => {
+      const data = parseDataParaDate(item.date);
+      const key = formatarDataISO(data);
+      const diaIndex = data.getDay();
+      const nomeDia = DIAS_SEMANA[diaIndex];
+      const diaSemanaCompleto = `${nomeDia === "Domingo" || nomeDia === "Sábado" 
+        ? nomeDia : `${nomeDia}-feira`}`;
+
+      if (!acc[key]) {
+        acc[key] = {
+          diaSemana: diaSemanaCompleto,
+          nomeCurto: nomeDia,
+          data: key,
+          dataFormatada: data.toLocaleDateString("pt-BR"),
+          almoco: [],
+          janta: [],
+        };
+      }
+
+      if (item.type === TIPO_REFEICAO.almoco) {
+        acc[key].almoco.push(item.name);
+      } else if (item.type === TIPO_REFEICAO.janta) {
+        acc[key].janta.push(item.name);
+      }
+
+      return acc;
+    },
+    {} as Record<string, CardapioDia>,
+  );
+}
+
+// ──────────────────────────────────────────────
+// COMPONENTES
+// ──────────────────────────────────────────────
+
+interface RefeicaoItemProps {
+  itens: string[];
+  tipo: TipoRefeicao;
+  diaSemana: string;
+  isHoje: boolean;
+  isLeft: boolean;
+}
+
+function RefeicaoItem({
+  itens,
+  tipo,
+  diaSemana,
+  isHoje,
+  isLeft,
+}: RefeicaoItemProps) {
+  const [isFav, toggleFav] = useFavoritoRefeicao(diaSemana, tipo);
+
+  const handleCompartilhar = useCallback(async () => {
     try {
       const lista = itens.map((item) => `• ${item}`).join("\n");
       await Share.share({
-        message: `🍽️ *${tipo} de ${dia.diaSemana}*\n\n${lista}`,
+        message: `🍽️ ${TIPO_REFEICAO[tipo]} - ${diaSemana}\n\n${lista}`,
       });
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao compartilhar:", error);
     }
-  };
+  }, [itens, tipo, diaSemana]);
+
+  const tituloStyle = isLeft ? s.refeicaoTituloRight : s.refeicaoTituloLeft;
+  const tituloColor = !isHoje ? COLORS.texto_forte : undefined;
+  const itensContainerStyle = isLeft ? s.itensLeft : s.itensRight;
+  const itemTextStyle = isLeft ? s.itemTextLeft : s.itemTextRight;
 
   return (
-    <View style={{ width, marginRight: CARD_GAP_MOB }}>
-      {/* ── Título com Badge "HOJE" ── */}
-      <View style={s.tituloDiaRow}>
-        <Text style={[s.diaTituloExtenso, isHoje && s.diaTituloExtensoHoje]}>
-          {dia.diaSemana.toLowerCase()}
-        </Text>
-        {isHoje && (
-          <View style={s.badgeHoje}>
-            <Text style={s.badgeHojeTexto}>HOJE</Text>
+    <>
+      <Text style={[tituloStyle, tituloColor && { color: tituloColor }]}>
+        {TIPO_REFEICAO[tipo]}
+      </Text>
+      <View style={s.refeicaoRow}>
+        {isLeft && (
+          <View style={itensContainerStyle}>
+            {renderItens(itens, itemTextStyle)}
+          </View>
+        )}
+
+        <View style={s.iconsColumn}>
+          <TouchableOpacity onPress={handleCompartilhar}>
+            <MaterialIcons name="share" size={20} color={COLORS.texto_forte} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={toggleFav}>
+            <MaterialIcons
+              name={isFav ? "favorite" : "favorite-border"}
+              size={20}
+              color={isFav ? "#c62828" : COLORS.texto_forte}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {!isLeft && (
+          <View style={itensContainerStyle}>
+            {renderItens(itens, itemTextStyle)}
           </View>
         )}
       </View>
+    </>
+  );
+}
+
+function renderItens(itens: string[], style: StyleProp<TextStyle>) {
+  return itens.map((item, i) => (
+    <Text key={`${item}-${i}`} style={style}>
+      {item}
+    </Text>
+  ));
+}
+
+interface CardDiaProps {
+  dia: CardapioDia;
+  width: number;
+  isHoje: boolean;
+}
+
+function CardDia({ dia, width, isHoje }: CardDiaProps) {
+
+  
+  return (
+    <View style={{ width, marginRight: CARD_GAP_MOB }}>
+      {/* Título com Badge "HOJE" */}
+      <View style={s.tituloDiaColumn}>
+  <View style={s.tituloDiaRow}>
+    <Text style={[s.diaTituloExtenso, isHoje && s.diaTituloExtensoHoje]}>
+      {dia.diaSemana}
+    </Text>
+    {isHoje && (
+      <View style={s.badgeHoje}>
+        <Text style={s.badgeHojeTexto}>HOJE</Text>
+      </View>
+    )}
+  </View>
+  <Text style={s.dataSubtitulo}>{dia.dataFormatada}</Text>
+</View>
 
       <Shadow
         distance={isHoje ? 2 : 6}
@@ -193,111 +287,168 @@ function CardDia({ dia, width, isHoje }: { dia: any; width: number; isHoje: bool
         containerStyle={{ width: "100%", marginBottom: 20 }}
       >
         <View style={[s.bigCard, isHoje && s.bigCardHoje]}>
-          {/* ── ALMOÇO ── */}
-          <Text style={[s.refeicaoTituloRight, !isHoje && { color: TEXTO_FORTE }]}>Almoço</Text>
-          <View style={s.refeicaoRow}>
-            <View style={s.itensLeft}>
-              {dia.almoco.map((item: string, i: number) => (
-                <Text key={i} style={s.itemTextLeft}>
-                  {item}
-                </Text>
-              ))}
-            </View>
-            <View style={s.iconsColumn}>
-              <TouchableOpacity onPress={() => compartilhar("Almoço", dia.almoco)}>
-                <MaterialIcons name="share" size={20} color={TEXTO_FORTE} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => toggleFav("almoco")}>
-                <MaterialIcons
-                  name={favAlmoco ? "favorite" : "favorite-border"}
-                  size={20}
-                  color={favAlmoco ? "#c62828" : TEXTO_FORTE}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* ALMOÇO */}
+          <RefeicaoItem
+            itens={dia.almoco}
+            tipo="almoco"
+            diaSemana={dia.diaSemana}
+            isHoje={isHoje}
+            isLeft
+          />
 
           {/* Linha Divisória */}
           <View style={s.linhaDivisoria} />
 
-          {/* ── JANTA ── */}
-          <Text style={[s.refeicaoTituloLeft, !isHoje && { color: TEXTO_FORTE }]}>Janta</Text>
-          <View style={s.refeicaoRow}>
-            <View style={s.iconsColumn}>
-              <TouchableOpacity onPress={() => compartilhar("Janta", dia.janta)}>
-                <MaterialIcons name="share" size={20} color={TEXTO_FORTE} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => toggleFav("janta")}>
-                <MaterialIcons
-                  name={favJanta ? "favorite" : "favorite-border"}
-                  size={20}
-                  color={favJanta ? "#c62828" : TEXTO_FORTE}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={s.itensRight}>
-              {dia.janta.map((item: string, i: number) => (
-                <Text key={i} style={s.itemTextRight}>
-                  {item}
-                </Text>
-              ))}
-            </View>
-          </View>
+          {/* JANTA */}
+          <RefeicaoItem
+            itens={dia.janta}
+            tipo="janta"
+            diaSemana={dia.diaSemana}
+            isHoje={isHoje}
+            isLeft={false}
+          />
         </View>
       </Shadow>
     </View>
   );
 }
 
+interface DiaNavBtnProps {
+  dia: CardapioDia;
+  isAtivo: boolean;
+  isHoje: boolean;
+  onPress: () => void;
+}
+
+function DiaNavBtn({ dia, isAtivo, isHoje, onPress }: DiaNavBtnProps) {
+  const btnStyle = isAtivo
+    ? s.diaBtnAtivo
+    : isHoje && !isAtivo
+      ? s.diaBtnHoje
+      : s.diaBtnInativo;
+
+  const textStyle = isHoje && !isAtivo ? s.diaBtnNomeHoje : s.diaBtnNome;
+
+  return (
+    <TouchableOpacity
+      style={[s.diaBtn, btnStyle]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={textStyle}>{dia.nomeCurto}</Text>
+    </TouchableOpacity>
+  );
+}
+
 // ──────────────────────────────────────────────
-// Tela Principal
+// TELA PRINCIPAL
 // ──────────────────────────────────────────────
 export default function CardapioScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
+
   const [paginaAtual, setPaginaAtual] = useState(0);
+  const [cardapioSemana, setCardapioSemana] = useState<CardapioDia[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const diaAtual = new Date().getDay();
+  const hojeISO = useMemo(() => obterHojeISO(), []);
+  const diaAtual = useMemo(
+    () => cardapioSemana.findIndex((d) => d.data === hojeISO),
+    [cardapioSemana, hojeISO],
+  );
 
-  const CARD_W_MOB = width - PADDING_H_MOB - CARD_PEEK;
-  const SNAP_INTERVAL = CARD_W_MOB + CARD_GAP_MOB;
+  const CARD_W_MOB = useMemo(() => width - PADDING_H_MOB - CARD_PEEK, [width]);
+  const SNAP_INTERVAL = useMemo(() => CARD_W_MOB + CARD_GAP_MOB, [CARD_W_MOB]);
 
+  // Carregar cardápio
   useEffect(() => {
-    const indexHoje = cardapioSemana.findIndex((d) => d.id === diaAtual);
-    if (indexHoje !== -1) {
-      setPaginaAtual(indexHoje);
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({
-          x: indexHoje * SNAP_INTERVAL,
-          animated: true,
-        });
-      }, 300);
+    async function carregarCardapio() {
+      try {
+        const res = await api.get<APIFoodItem[]>("/foods");
+        const grouped = agruparCardapiosPorDia(res.data);
+        const dias = Object.values(grouped).sort((a, b) =>
+          a.data.localeCompare(b.data),
+        );
+
+        setCardapioSemana(dias);
+      } catch (err) {
+        console.error("Erro ao carregar cardápio:", err);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    carregarCardapio();
   }, []);
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const pagina = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
-    setPaginaAtual(pagina);
-  };
+  // Scroll automático para hoje
+  useEffect(() => {
+    if (cardapioSemana.length === 0 || diaAtual === -1) return;
 
-  const irParaDia = (idx: number) =>
-    scrollRef.current?.scrollTo({ x: idx * SNAP_INTERVAL, animated: true });
+    setPaginaAtual(diaAtual);
 
-  const handleVoltar = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        x: diaAtual * SNAP_INTERVAL,
+        animated: true,
+      });
+    }, 300);
+  }, [cardapioSemana, diaAtual, SNAP_INTERVAL]);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const pagina = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
+      setPaginaAtual(pagina);
+    },
+    [SNAP_INTERVAL],
+  );
+
+  const irParaDia = useCallback(
+    (idx: number) => {
+      scrollRef.current?.scrollTo({ x: idx * SNAP_INTERVAL, animated: true });
+    },
+    [SNAP_INTERVAL],
+  );
+
+  const handleVoltar = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace("/(tabs)/menu");
     }
-  };
+  }, [router]);
+
+  // Estados de loading e erro
+  if (loading) {
+    return (
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={COLORS.verde_mid} />
+      </View>
+    );
+  }
+
+  if (cardapioSemana.length === 0) {
+    return (
+      <View style={s.center}>
+        <Text style={{ fontSize: 18 }}>Nenhum cardápio disponível.</Text>
+      </View>
+    );
+  }
+
+  const primeiraData = cardapioSemana[0].dataFormatada;
+  const ultimaData = cardapioSemana[cardapioSemana.length - 1].dataFormatada;
+  const rangoData = `Semana ${primeiraData} - ${ultimaData}`;
 
   return (
     <View style={s.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.branco} />
 
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        {/* ── Cabeçalho ── */}
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Cabeçalho */}
         <View style={s.headerWrap}>
           <Shadow
             distance={1}
@@ -306,49 +457,45 @@ export default function CardapioScreen() {
             style={{ borderRadius: 8 }}
             containerStyle={{ marginTop: 5 }}
           >
-            <TouchableOpacity style={s.voltarBtn} onPress={handleVoltar} activeOpacity={0.8}>
-              <MaterialIcons name="arrow-back" size={20} color="#fff" />
+            <TouchableOpacity
+              style={s.voltarBtn}
+              onPress={handleVoltar}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name="arrow-back"
+                size={20}
+                color={COLORS.branco}
+              />
               <Text style={s.voltarText}>Voltar</Text>
             </TouchableOpacity>
           </Shadow>
 
           <View style={s.titleArea}>
             <Text style={s.titulo}>Cardápio da{"\n"}Semana</Text>
-            <Text style={s.subtitulo}>Semana {"{data da semana}"}</Text>
+            <Text style={s.subtitulo}>{rangoData}</Text>
           </View>
         </View>
 
-        {/* ── Pílulas dos Dias ── */}
+        {/* Navegação de Dias */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{ flexGrow: 0, maxHeight: 50 }}
           contentContainerStyle={s.diasNav}
         >
-          {cardapioSemana.map((dia, idx) => {
-            const isAtivo = paginaAtual === idx;
-            const isHoje = dia.id === diaAtual;
-
-            return (
-              <TouchableOpacity
-                key={dia.id}
-                style={[
-                  s.diaBtn,
-                  isAtivo ? s.diaBtnAtivo : s.diaBtnInativo,
-                  isHoje && !isAtivo && s.diaBtnHoje,
-                ]}
-                onPress={() => irParaDia(idx)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.diaBtnNome, isHoje && !isAtivo && s.diaBtnNomeHoje]}>
-                  {dia.nomeCurto}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {cardapioSemana.map((dia, idx) => (
+            <DiaNavBtn
+              key={dia.data}
+              dia={dia}
+              isAtivo={paginaAtual === idx}
+              isHoje={idx === diaAtual}
+              onPress={() => irParaDia(idx)}
+            />
+          ))}
         </ScrollView>
 
-        {/* ── Carrossel de Cards ── */}
+        {/* Carrossel de Cards */}
         <View style={{ marginTop: 20 }}>
           <ScrollView
             ref={scrollRef}
@@ -360,27 +507,32 @@ export default function CardapioScreen() {
               paddingLeft: PADDING_H_MOB,
               paddingRight: PADDING_H_MOB,
             }}
-            onScroll={onScroll}
+            onScroll={handleScroll}
             scrollEventThrottle={16}
           >
-            {cardapioSemana.map((dia) => {
-              const isHoje = dia.id === diaAtual;
-              return (
-                <CardDia key={dia.id} dia={dia} width={CARD_W_MOB} isHoje={isHoje} />
-              );
-            })}
+            {cardapioSemana.map((dia, idx) => (
+              <CardDia
+                key={dia.data}
+                dia={dia}
+                width={CARD_W_MOB}
+                isHoje={idx === diaAtual}
+              />
+            ))}
           </ScrollView>
         </View>
 
-        {/* ── Paginação (Bolinhas) ── */}
+        {/* Paginação */}
         <View style={s.paginacao}>
           {cardapioSemana.map((_, idx) => (
-            <View key={idx} style={[s.dot, paginaAtual === idx && s.dotAtivo]} />
+            <View
+              key={cardapioSemana[idx].data}
+              style={[s.dot, paginaAtual === idx && s.dotAtivo]}
+            />
           ))}
         </View>
       </ScrollView>
 
-      {/* ── Rodapé Fixo ── */}
+      {/* Rodapé Fixo */}
       <View style={s.footerBlock}>
         <Image
           source={require("../../assets/images/logo-ifrs.png")}
@@ -388,7 +540,8 @@ export default function CardapioScreen() {
           resizeMode="contain"
         />
         <Text style={s.footerTexto}>
-          Análise e Desenvolvimento de Sistemas <Text style={{ color: VERDE_MID }}>2026</Text>
+          Análise e Desenvolvimento de Sistemas{" "}
+          <Text style={{ color: COLORS.verde_mid }}>2026</Text>
         </Text>
       </View>
     </View>
@@ -396,13 +549,18 @@ export default function CardapioScreen() {
 }
 
 // ──────────────────────────────────────────────
-// Estilos
+// ESTILOS
 // ──────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.branco,
     paddingTop: Platform.OS === "android" ? 40 : 50,
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerWrap: {
     flexDirection: "row",
@@ -411,17 +569,27 @@ const s = StyleSheet.create({
     paddingHorizontal: PADDING_H_MOB,
     marginBottom: 20,
   },
+ tituloDiaColumn: {
+  flexDirection: "column",
+  marginBottom: 14,
+  marginLeft: 10,
+  gap: 6,
+},
+dataSubtitulo: {
+  fontSize: 13,
+  fontFamily: "InterSemiBold",
+},
   voltarBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: VERDE_MID,
+    backgroundColor: COLORS.verde_mid,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     gap: 4,
   },
   voltarText: {
-    color: "#fff",
+    color: COLORS.branco,
     fontFamily: "InterBold",
     fontSize: 16,
   },
@@ -433,7 +601,7 @@ const s = StyleSheet.create({
   titulo: {
     fontSize: 32,
     fontFamily: "InterBlack",
-    color: TEXTO_FORTE,
+    color: COLORS.texto_forte,
     textAlign: "right",
     lineHeight: 32,
     letterSpacing: -1,
@@ -457,23 +625,23 @@ const s = StyleSheet.create({
     borderColor: "transparent",
   },
   diaBtnInativo: {
-    backgroundColor: CINZA_INATIVO,
+    backgroundColor: COLORS.cinza_inativo,
   },
   diaBtnAtivo: {
-    backgroundColor: VERDE_MID,
-    borderColor: VERDE_MID,
+    backgroundColor: COLORS.verde_mid,
+    borderColor: COLORS.verde_mid,
   },
   diaBtnHoje: {
-    backgroundColor: "#fff",
-    borderColor: VERDE_MID,
+    backgroundColor: COLORS.branco,
+    borderColor: COLORS.verde_mid,
   },
   diaBtnNome: {
-    color: "#fff",
+    color: COLORS.branco,
     fontFamily: "InterBold",
     fontSize: 14,
   },
   diaBtnNomeHoje: {
-    color: VERDE_MID,
+    color: COLORS.verde_mid,
   },
   tituloDiaRow: {
     flexDirection: "row",
@@ -485,40 +653,39 @@ const s = StyleSheet.create({
   diaTituloExtenso: {
     fontSize: 20,
     fontFamily: "InterBlack",
-    color: TEXTO_FORTE,
+    color: COLORS.texto_forte,
   },
   diaTituloExtensoHoje: {
-    color: VERDE_MID,
+    color: COLORS.verde_mid,
     fontSize: 22,
-    fontFamily: "InterBlack",
   },
   badgeHoje: {
-    backgroundColor: DESTAQUE_HOJE,
+    backgroundColor: COLORS.destaque_hoje,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
   },
   badgeHojeTexto: {
-    color: "#fff",
+    color: COLORS.branco,
     fontSize: 10,
     fontFamily: "InterBold",
     letterSpacing: 0.5,
   },
   bigCard: {
-    backgroundColor: CINZA_BG_CARD,
+    backgroundColor: COLORS.cinza_bg_card,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1.5,
     borderColor: "#d4e0d4",
   },
   bigCardHoje: {
-    backgroundColor: "#fff",
-    borderColor: VERDE_MID,
+    backgroundColor: COLORS.branco,
+    borderColor: COLORS.verde_mid,
     borderWidth: 2.5,
   },
   linhaDivisoria: {
     height: 1,
-    backgroundColor: CINZA_LINHA,
+    backgroundColor: COLORS.cinza_linha,
     marginVertical: 15,
   },
   refeicaoRow: {
@@ -534,7 +701,7 @@ const s = StyleSheet.create({
   refeicaoTituloRight: {
     fontSize: 22,
     fontFamily: "InterBlack",
-    color: VERDE_MID,
+    color: COLORS.verde_mid,
     textAlign: "right",
     marginBottom: 10,
   },
@@ -545,14 +712,14 @@ const s = StyleSheet.create({
   itemTextLeft: {
     fontSize: 16,
     fontFamily: "InterBold",
-    color: TEXTO_FORTE,
+    color: COLORS.texto_forte,
     textAlign: "left",
     lineHeight: 20,
   },
   refeicaoTituloLeft: {
     fontSize: 22,
     fontFamily: "InterBlack",
-    color: VERDE_MID,
+    color: COLORS.verde_mid,
     textAlign: "left",
     marginBottom: 10,
   },
@@ -563,7 +730,7 @@ const s = StyleSheet.create({
   itemTextRight: {
     fontSize: 16,
     fontFamily: "InterBold",
-    color: TEXTO_FORTE,
+    color: COLORS.texto_forte,
     textAlign: "right",
     lineHeight: 20,
   },
@@ -583,7 +750,7 @@ const s = StyleSheet.create({
     backgroundColor: "#000",
   },
   footerBlock: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.branco,
     alignItems: "center",
     paddingTop: 15,
     paddingBottom: 25,
