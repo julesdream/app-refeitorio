@@ -8,6 +8,7 @@ import {
   Alert,
   StyleSheet,
 } from "react-native";
+import api from "../../src/services/api";
 
 const VERDE = "#1e6e24";
 
@@ -21,14 +22,14 @@ export default function ManutencaoFoods() {
   const [name, setName] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
 
-  // listar 
+  // Listar alimentos
   const carregarFoods = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/v1/foods");
-      const data = await res.json();
+      const { data } = await api.get("/foods");
       setFoods(data);
-    } catch (err) {
-      Alert.alert("Erro", "Não foi possível carregar foods");
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível carregar os alimentos.");
     }
   };
 
@@ -36,65 +37,62 @@ export default function ManutencaoFoods() {
     carregarFoods();
   }, []);
 
-  // criar/editar
+  // Criar ou editar alimento
   const salvarFood = async () => {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      Alert.alert("Erro", "Digite o nome do alimento.");
+      return;
+    }
 
     try {
-      if (editId) {
-        // UPDATE
-        await fetch(`http://localhost:3001/api/v1/foods/${editId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ name }),
-        });
+      const body = {
+        name,
+      };
+
+      if (editId !== null) {
+        await api.put(`/foods/${editId}`, body);
       } else {
-        // CREATE
-        await fetch("http://localhost:3001/api/v1/foods", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ name }),
-        });
+        await api.post("/foods", body);
       }
 
       setName("");
       setEditId(null);
+
       carregarFoods();
-    } catch (err) {
-      Alert.alert("Erro", "Não foi possível salvar");
+
+      Alert.alert("Sucesso", "Alimento salvo com sucesso!");
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível salvar o alimento.");
     }
   };
 
-  // deletar
+  // Excluir alimento
   const deletarFood = async (id?: number) => {
     if (!id) return;
 
     try {
-      await fetch(`http://localhost:3001/api/v1/foods/${id}`, {
-        method: "DELETE",
-      });
+      await api.delete(`/foods/${id}`);
 
       carregarFoods();
-    } catch (err) {
-      Alert.alert("Erro", "Não foi possível deletar");
+
+      Alert.alert("Sucesso", "Alimento excluído com sucesso!");
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível excluir o alimento.");
     }
   };
 
-  // editar
+  // Editar alimento
   const editarFood = (food: Food) => {
     setName(food.name);
-    setEditId(food.id || null);
+    setEditId(food.id ?? null);
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Manutenção de Foods</Text>
 
-      {/* INPUT */}
       <TextInput
         style={styles.input}
         placeholder="Nome do alimento"
@@ -108,10 +106,9 @@ export default function ManutencaoFoods() {
         </Text>
       </TouchableOpacity>
 
-      {/* lista */}
       <FlatList
         data={foods}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item) => item.id?.toString() ?? item.name}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.text}>{item.name}</Text>
@@ -121,19 +118,29 @@ export default function ManutencaoFoods() {
                 style={styles.editBtn}
                 onPress={() => editarFood(item)}
               >
-                <Text style={{ color: "#fff" }}>Editar</Text>
+                <Text style={styles.actionText}>Editar</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.deleteBtn}
                 onPress={() =>
-                  Alert.alert("Confirmar", "Deseja deletar?", [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Sim", onPress: () => deletarFood(item.id) },
-                  ])
+                  Alert.alert(
+                    "Confirmar",
+                    "Deseja excluir este alimento?",
+                    [
+                      {
+                        text: "Cancelar",
+                        style: "cancel",
+                      },
+                      {
+                        text: "Excluir",
+                        onPress: () => deletarFood(item.id),
+                      },
+                    ]
+                  )
                 }
               >
-                <Text style={{ color: "#fff" }}>Excluir</Text>
+                <Text style={styles.actionText}>Excluir</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -189,6 +196,7 @@ const styles = StyleSheet.create({
 
   text: {
     fontSize: 16,
+    fontWeight: "600",
   },
 
   actions: {
@@ -198,13 +206,18 @@ const styles = StyleSheet.create({
 
   editBtn: {
     backgroundColor: "#f0a500",
-    padding: 6,
+    padding: 8,
     borderRadius: 6,
   },
 
   deleteBtn: {
     backgroundColor: "red",
-    padding: 6,
+    padding: 8,
     borderRadius: 6,
+  },
+
+  actionText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });
