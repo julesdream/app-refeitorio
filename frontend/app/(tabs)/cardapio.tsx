@@ -365,7 +365,7 @@ export default function CardapioScreen() {
   useEffect(() => {
     async function carregarCardapio() {
       try {
-        const res = await api.get<APIFoodItem[]>("/foods");
+        const res = await api.get<APIFoodItem[]>("/menus");
         const grouped = agruparCardapiosPorDia(res.data);
         const dias = Object.values(grouped).sort((a, b) =>
           a.data.localeCompare(b.data),

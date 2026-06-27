@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   Alert,
@@ -14,7 +13,9 @@ import { Shadow } from "react-native-shadow-2";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useRouter } from "expo-router";
 import api from "../../src/services/api";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { MaterialIcons } from "@expo/vector-icons";
 
@@ -33,9 +34,18 @@ const COLORS = {
 } as const;
 
 const TIPO_REFEICAO = {
-  almoco: "Almoço",
-  jantar: "Jantar",
+  cafe: "CAFE",
+  almoco: "ALMOCO",
+  jantar: "JANTAR",
 } as const;
+
+type TipoRefeicao = (typeof TIPO_REFEICAO)[keyof typeof TIPO_REFEICAO];
+
+const ABAS: { tipo: TipoRefeicao; label: string }[] = [
+  { tipo: TIPO_REFEICAO.cafe, label: "Café da Manhã" },
+  { tipo: TIPO_REFEICAO.almoco, label: "Almoço" },
+  { tipo: TIPO_REFEICAO.jantar, label: "Janta" },
+];
 
 // ──────────────────────────────────────────────
 // TYPES
@@ -46,17 +56,33 @@ interface Usuario {
   email?: string;
 }
 
-interface ItemRefeicao {
-  nome: string;
-  data: string;
-  tipo: string;
+interface Food {
+  id: number;
+  name: string;
 }
+
+type ItensPorRefeicao = Record<TipoRefeicao, number[]>;
+
+const ITENS_INICIAIS: ItensPorRefeicao = {
+  [TIPO_REFEICAO.cafe]: [],
+  [TIPO_REFEICAO.almoco]: [],
+  [TIPO_REFEICAO.jantar]: [],
+};
 
 // ──────────────────────────────────────────────
 // UTILITY FUNCTIONS
 // ──────────────────────────────────────────────
 function formatarDataBR(date: Date): string {
   return date.toLocaleDateString("pt-BR");
+}
+
+// Formata para "YYYY-MM-DD" (formato esperado pela API), sem depender de
+// toISOString (que usa UTC e pode "voltar" um dia dependendo do fuso).
+function formatarDataISO(date: Date): string {
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
 }
 
 // ──────────────────────────────────────────────
@@ -128,51 +154,77 @@ function SeletorData({
   );
 }
 
-interface SeletorRefeicaoProps {
-  tipo: "Almoço" | "Jantar";
-  onTipoChange: (tipo: "Almoço" | "Jantar") => void;
+interface TabBarRefeicaoProps {
+  abaAtiva: TipoRefeicao;
+  onChangeAba: (tipo: TipoRefeicao) => void;
+  contagemPorTipo: Record<TipoRefeicao, number>;
 }
 
-function SeletorRefeicao({ tipo, onTipoChange }: SeletorRefeicaoProps) {
+function TabBarRefeicao({
+  abaAtiva,
+  onChangeAba,
+  contagemPorTipo,
+}: TabBarRefeicaoProps) {
   return (
-    <>
-      <Text style={s.label}>Tipo da Refeição</Text>
-      <View style={s.pickerContainer}>
-        <Picker
-          selectedValue={tipo}
-          onValueChange={onTipoChange}
-          style={s.picker}
-        >
-          <Picker.Item label={TIPO_REFEICAO.almoco} value={TIPO_REFEICAO.almoco} />
-          <Picker.Item label={TIPO_REFEICAO.jantar} value={TIPO_REFEICAO.jantar} />
-        </Picker>
-      </View>
-    </>
+    <View style={s.tabBar}>
+      {ABAS.map(({ tipo, label }) => {
+        const ativa = tipo === abaAtiva;
+        const qtd = contagemPorTipo[tipo];
+        return (
+          <TouchableOpacity
+            key={tipo}
+            style={[s.tabItem, ativa && s.tabItemAtiva]}
+            onPress={() => onChangeAba(tipo)}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.tabText, ativa && s.tabTextAtiva]}>
+              {label}
+              {qtd > 0 ? ` (${qtd})` : ""}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
 
 interface AdicionadorItemProps {
-  item: string;
-  onItemChange: (item: string) => void;
+  foods: Food[];
+  foodSelecionado: number | null;
+  onFoodChange: (id: number | null) => void;
   onAdicionarItem: () => void;
+  loadingFoods: boolean;
 }
 
 function AdicionadorItem({
-  item,
-  onItemChange,
+  foods,
+  foodSelecionado,
+  onFoodChange,
   onAdicionarItem,
+  loadingFoods,
 }: AdicionadorItemProps) {
   return (
     <>
       <Text style={s.label}>Item do Cardápio</Text>
       <View style={s.row}>
-        <TextInput
-          style={[s.input, { flex: 1, marginBottom: 0 }]}
-          placeholder="Digite um item"
-          placeholderTextColor={COLORS.texto_suave}
-          value={item}
-          onChangeText={onItemChange}
-        />
+        <View style={[s.pickerContainer, { flex: 1, marginBottom: 0 }]}>
+          <Picker
+            selectedValue={foodSelecionado}
+            onValueChange={(value) =>
+              onFoodChange(value === "" ? null : Number(value))
+            }
+            style={s.picker}
+            enabled={!loadingFoods && foods.length > 0}
+          >
+            <Picker.Item
+              label={loadingFoods ? "Carregando itens..." : "Selecione um item"}
+              value=""
+            />
+            {foods.map((food) => (
+              <Picker.Item key={food.id} label={food.name} value={food.id} />
+            ))}
+          </Picker>
+        </View>
         <TouchableOpacity
           style={s.addButton}
           onPress={onAdicionarItem}
@@ -186,11 +238,12 @@ function AdicionadorItem({
 }
 
 interface ListaItensProps {
-  itens: string[];
+  itens: number[];
+  foodsPorId: Record<number, string>;
   onRemoverItem?: (index: number) => void;
 }
 
-function ListaItens({ itens, onRemoverItem }: ListaItensProps) {
+function ListaItens({ itens, foodsPorId, onRemoverItem }: ListaItensProps) {
   return (
     <>
       <Text style={[s.label, { marginTop: 20 }]}>Itens Adicionados</Text>
@@ -201,10 +254,16 @@ function ListaItens({ itens, onRemoverItem }: ListaItensProps) {
         scrollEnabled={false}
         renderItem={({ item, index }) => (
           <View style={s.itemContainer}>
-            <Text style={s.listItem}>• {item}</Text>
+            <Text style={s.listItem}>
+              • {foodsPorId[item] ?? `Item #${item}`}
+            </Text>
             {onRemoverItem && (
               <TouchableOpacity onPress={() => onRemoverItem(index)}>
-                <MaterialIcons name="close" size={18} color={COLORS.texto_suave} />
+                <MaterialIcons
+                  name="close"
+                  size={18}
+                  color={COLORS.texto_suave}
+                />
               </TouchableOpacity>
             )}
           </View>
@@ -239,9 +298,7 @@ function BotaoSalvar({ onSalvar, loading = false }: BotaoSalvarProps) {
   );
 }
 
-interface RodapeProps {}
-
-function Rodape({}: RodapeProps) {
+function Rodape() {
   return (
     <View style={s.footerBlock}>
       <Image
@@ -266,13 +323,51 @@ export default function CadastroRefeicao() {
 
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
-  const [tipo, setTipo] = useState<"Almoço" | "Jantar">(TIPO_REFEICAO.almoco);
-  const [item, setItem] = useState("");
-  const [itens, setItens] = useState<string[]>([]);
+
+  const [abaAtiva, setAbaAtiva] = useState<TipoRefeicao>(TIPO_REFEICAO.cafe);
+  const [itensPorRefeicao, setItensPorRefeicao] =
+    useState<ItensPorRefeicao>(ITENS_INICIAIS);
+  const [foodSelecionado, setFoodSelecionado] = useState<number | null>(null);
+  const [foods, setFoods] = useState<Food[]>([]);
+  const [loadingFoods, setLoadingFoods] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  // Carregar lista de foods cadastrados
+  React.useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        const { data } = await api.get<Food[]>("/foods");
+        console.log(data);
+        if (ativo) {
+          setFoods(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar itens:", error);
+        Alert.alert("Erro", "Não foi possível carregar a lista de itens.");
+      } finally {
+        if (ativo) setLoadingFoods(false);
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  const foodsPorId = useMemo(
+    () =>
+      foods.reduce(
+        (acc, food) => {
+          acc[food.id] = food.name;
+          return acc;
+        },
+        {} as Record<number, string>,
+      ),
+    [foods],
+  );
+
   // Verificar acesso
-  useEffect(() => {
+  React.useEffect(() => {
     const usuarioValido = user && (user as Usuario).role === "SERVIDOR";
 
     if (!usuarioValido) {
@@ -284,7 +379,7 @@ export default function CadastroRefeicao() {
             text: "OK",
             onPress: () => router.replace("/(tabs)/menu"),
           },
-        ]
+        ],
       );
     }
   }, [user, router]);
@@ -296,15 +391,16 @@ export default function CadastroRefeicao() {
         setDate(selectedDate);
       }
     },
-    []
+    [],
   );
 
-  const handleTipoChange = useCallback((novoTipo: "Almoço" | "Jantar") => {
-    setTipo(novoTipo);
+  const handleChangeAba = useCallback((tipo: TipoRefeicao) => {
+    setAbaAtiva(tipo);
+    setFoodSelecionado(null);
   }, []);
 
-  const handleItemChange = useCallback((novoItem: string) => {
-    setItem(novoItem);
+  const handleFoodChange = useCallback((id: number | null) => {
+    setFoodSelecionado(id);
   }, []);
 
   const handleShowPicker = useCallback((show: boolean) => {
@@ -312,44 +408,73 @@ export default function CadastroRefeicao() {
   }, []);
 
   const handleAdicionarItem = useCallback(() => {
-    if (!item.trim()) {
-      Alert.alert("Aviso", "Digite um item válido");
+    if (foodSelecionado === null) {
+      Alert.alert("Aviso", "Selecione um item");
       return;
     }
-    setItens((prev) => [...prev, item]);
-    setItem("");
-  }, [item]);
+    setItensPorRefeicao((prev) => {
+      if (prev[abaAtiva].includes(foodSelecionado)) {
+        Alert.alert("Aviso", "Esse item já foi adicionado nessa refeição");
+        return prev;
+      }
+      return {
+        ...prev,
+        [abaAtiva]: [...prev[abaAtiva], foodSelecionado],
+      };
+    });
+    setFoodSelecionado(null);
+  }, [foodSelecionado, abaAtiva]);
 
-  const handleRemoverItem = useCallback((index: number) => {
-    setItens((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const handleRemoverItem = useCallback(
+    (index: number) => {
+      setItensPorRefeicao((prev) => ({
+        ...prev,
+        [abaAtiva]: prev[abaAtiva].filter((_, i) => i !== index),
+      }));
+    },
+    [abaAtiva],
+  );
+
+  const totalItens = ABAS.reduce(
+    (acc, { tipo }) => acc + itensPorRefeicao[tipo].length,
+    0,
+  );
+
+  const contagemPorTipo = ABAS.reduce(
+    (acc, { tipo }) => {
+      acc[tipo] = itensPorRefeicao[tipo].length;
+      return acc;
+    },
+    {} as Record<TipoRefeicao, number>,
+  );
 
   const handleSalvarRefeicao = useCallback(async () => {
-    if (itens.length === 0) {
-      Alert.alert("Erro", "Adicione pelo menos um item");
+    if (totalItens === 0) {
+      Alert.alert("Erro", "Adicione pelo menos um item em alguma refeição");
       return;
     }
 
     setLoading(true);
 
     try {
-      const dataFormatada = formatarDataBR(date);
+      const meals = ABAS.map(({ tipo }) => ({
+        type: tipo,
+        items: itensPorRefeicao[tipo],
+      })).filter((meal) => meal.items.length > 0);
 
-      for (const nome of itens) {
-        await api.post("/foods", {
-          name: nome,
-          date: dataFormatada,
-          type: tipo,
-        });
-      }
+      await api.post("/menus", {
+        date: formatarDataISO(date),
+        meals,
+      });
 
       Alert.alert("Sucesso", "Refeição cadastrada com sucesso!", [
         {
           text: "OK",
           onPress: () => {
-            setItens([]);
-            setItem("");
+            setItensPorRefeicao(ITENS_INICIAIS);
+            setFoodSelecionado(null);
             setDate(new Date());
+            setAbaAtiva(TIPO_REFEICAO.cafe);
           },
         },
       ]);
@@ -359,10 +484,10 @@ export default function CadastroRefeicao() {
     } finally {
       setLoading(false);
     }
-  }, [itens, date, tipo]);
+  }, [itensPorRefeicao, totalItens, date]);
 
   const handleVoltar = useCallback(() => {
-    if (itens.length > 0) {
+    if (totalItens > 0) {
       Alert.alert(
         "Descartar Alterações?",
         "Você tem itens não salvos. Deseja voltar mesmo assim?",
@@ -378,7 +503,7 @@ export default function CadastroRefeicao() {
               }
             },
           },
-        ]
+        ],
       );
     } else {
       if (router.canGoBack()) {
@@ -387,7 +512,7 @@ export default function CadastroRefeicao() {
         router.replace("/(tabs)/menu");
       }
     }
-  }, [router, itens.length]);
+  }, [router, totalItens]);
 
   // Bloquear acesso não autorizados
   if (!user || (user as Usuario).role !== "SERVIDOR") {
@@ -408,7 +533,12 @@ export default function CadastroRefeicao() {
         startColor="#00000015"
         offset={[6, 10]}
         style={{ width: "100%", borderRadius: 16, alignSelf: "center" }}
-        containerStyle={{ width: "90%", alignSelf: "center", paddingHorizontal: 2, marginBottom: 20 }}
+        containerStyle={{
+          width: "90%",
+          alignSelf: "center",
+          paddingHorizontal: 2,
+          marginBottom: 20,
+        }}
       >
         <View style={s.card}>
           <SeletorData
@@ -418,15 +548,26 @@ export default function CadastroRefeicao() {
             setShowPicker={handleShowPicker}
           />
 
-          <SeletorRefeicao tipo={tipo} onTipoChange={handleTipoChange} />
-
-          <AdicionadorItem
-            item={item}
-            onItemChange={handleItemChange}
-            onAdicionarItem={handleAdicionarItem}
+          <Text style={[s.label, { marginTop: 20 }]}>Refeição</Text>
+          <TabBarRefeicao
+            abaAtiva={abaAtiva}
+            onChangeAba={handleChangeAba}
+            contagemPorTipo={contagemPorTipo}
           />
 
-          <ListaItens itens={itens} onRemoverItem={handleRemoverItem} />
+          <AdicionadorItem
+            foods={foods}
+            foodSelecionado={foodSelecionado}
+            onFoodChange={handleFoodChange}
+            onAdicionarItem={handleAdicionarItem}
+            loadingFoods={loadingFoods}
+          />
+
+          <ListaItens
+            itens={itensPorRefeicao[abaAtiva]}
+            foodsPorId={foodsPorId}
+            onRemoverItem={handleRemoverItem}
+          />
 
           <BotaoSalvar onSalvar={handleSalvarRefeicao} loading={loading} />
         </View>
@@ -497,19 +638,31 @@ const s = StyleSheet.create({
     marginBottom: 12,
     justifyContent: "center",
   },
-  pickerContainer: {
+  tabBar: {
+    flexDirection: "row",
     backgroundColor: COLORS.bg_light,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 10,
+    padding: 4,
     marginBottom: 12,
-    height: 50,
-    justifyContent: "center",
-    overflow: "hidden",
   },
-  picker: {
-    width: "100%",
-    color: COLORS.texto_forte,
+  tabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabItemAtiva: {
+    backgroundColor: COLORS.verde_mid,
+  },
+  tabText: {
+    fontSize: 13,
+    fontFamily: "InterSemiBold",
+    color: COLORS.texto_suave,
+  },
+  tabTextAtiva: {
+    color: COLORS.branco,
   },
   row: {
     flexDirection: "row",

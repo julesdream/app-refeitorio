@@ -1,5 +1,7 @@
 import { Request, Response, Router } from "express";
 import { FoodController } from "../controllers/food";
+import { validationMiddleware } from "../middlewares/validation-middleware";
+import { foodSchema } from "../schemas/food";
 
 export const foodRouter = Router();
 const foodController = new FoodController();
@@ -20,27 +22,36 @@ foodRouter.get("/:id", async (req: Request, res: Response) => {
   return res.status(statusCode).json(body);
 });
 
-foodRouter.post("/", async (req: Request, res: Response) => {
-  const food = req.body;
+foodRouter.post(
+  "/",
+  validationMiddleware(foodSchema),
+  async (req: Request, res: Response) => {
+    const food = req.body;
 
-  const { body, statusCode } = await foodController.createFood(food);
+    const { body, statusCode } = await foodController.createFood(food);
 
-  return res.status(statusCode).json(body);
-});
+    return res.status(statusCode).json(body);
+  },
+);
 
-foodRouter.patch("/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const food = req.body;
+foodRouter.patch(
+  "/:id",
+  validationMiddleware(foodSchema),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const food = req.body;
 
-  if (!id) return res.status(400).json({ error: "Informe o código da comida" });
+    if (!id)
+      return res.status(400).json({ error: "Informe o código da comida" });
 
-  const { body, statusCode } = await foodController.updateFood(
-    Number(id),
-    food,
-  );
+    const { body, statusCode } = await foodController.updateFood(
+      Number(id),
+      food,
+    );
 
-  return res.status(statusCode).json(body);
-});
+    return res.status(statusCode).json(body);
+  },
+);
 
 foodRouter.delete("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
