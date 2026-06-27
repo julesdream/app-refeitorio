@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,116 +13,235 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { Shadow } from "react-native-shadow-2";
 
 // ──────────────────────────────────────────────
-// Paleta de Cores
+// CONSTANTS
 // ──────────────────────────────────────────────
-const VERDE_DARK = "#1b5e20";
-const VERDE_MID = "#007A1B";
-const VERMELHO = "#c62828";
-const TEXTO_FORTE = "#333333";
+const COLORS = {
+  verde_dark: "#1b5e20",
+  verde_mid: "#007A1B",
+  vermelho: "#c62828",
+  texto_forte: "#333333",
+  branco: "#fff",
+} as const;
 
-export default function MenuScreen() {
-  const router = useRouter();
-  const { logout, user } = useAuth();
+// ──────────────────────────────────────────────
+// TYPES
+// ──────────────────────────────────────────────
+interface Usuario {
+  role: "ALUNO" | "SERVIDOR" | "ADMIN";
+  name?: string;
+  email?: string;
+}
 
-  const lidarComLogout = async () => {
-    await logout();
-    router.replace("/");
-  };
+// ──────────────────────────────────────────────
+// UTILITY FUNCTIONS
+// ──────────────────────────────────────────────
+function extrairPrimeiroNome(user: Usuario | null): string {
+  if (!user) return "Aluno";
 
-  // Extrai o primeiro nome do usuário
-  const nome = (user as any)?.name
-    ? (user as any).name.split(" ")[0]
-    : ((user as any)?.email?.split("@")[0] ?? "Aluno");
+  if (user.name) {
+    return user.name.split(" ")[0];
+  }
 
+  if (user.email) {
+    return user.email.split("@")[0];
+  }
+
+  return "Aluno";
+}
+
+// ──────────────────────────────────────────────
+// COMPONENTES
+// ──────────────────────────────────────────────
+
+interface TopoProps {}
+
+function Topo({}: TopoProps) {
   return (
-    <View style={s.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <View style={s.topoBranco}>
+      <Text style={s.headerTitle}>
+        REFEITÓRIO{"\n"}IFRS
+      </Text>
+      <Image
+        source={require("../../assets/images/logo-ifrs-branco.png")}
+        style={s.logoTopo}
+        resizeMode="contain"
+      />
+    </View>
+  );
+}
 
-      {/* ── Faixa Branca Superior ── */}
-      <View style={s.topoBranco}>
-        <Text style={s.headerTitle}>REFEITÓRIO{"\n"}IFRS</Text>
-        <Image
-          source={require("../../assets/images/logo-ifrs-branco.png")}
-          style={s.logoTopo}
-          resizeMode="contain"
-        />
-      </View>
+interface SaudacaoProps {
+  nome: string;
+}
 
-      {/* ── Área Verde Central ── */}
-      <View style={s.areaVerde}>
-        <Text style={s.saudacao}>
-          Olá, seja bem vindo{"\n"}
-          {nome}!
-        </Text>
+function Saudacao({ nome }: SaudacaoProps) {
+  return (
+    <Text style={s.saudacao}>
+      Olá, seja bem vindo{"\n"}
+      {nome}!
+    </Text>
+  );
+}
 
-        {/* ── Botões de Serviço ── */}
-        <View style={s.areaServicos}>
-          <Shadow
-            distance={1}
-            startColor="#1d5807"
-            offset={[6, 8]}
-            style={{ width: "100%", borderRadius: 12 }}
-            containerStyle={{ width: "100%" }}
-          >
-            <TouchableOpacity
-              style={s.btnBranco}
-              onPress={() => router.push("/(tabs)/cardapio")}
-              activeOpacity={0.85}
-            >
-              <Text style={s.btnBrancoTexto}>Cardápio Semanal</Text>
-            </TouchableOpacity>
-          </Shadow>
-        </View>
+interface BotaoCardapioProps {
+  onPress: () => void;
+}
 
-        {/* ── Botão Sair ── */}
-        <Shadow
-          distance={1}
-          startColor="#00000040"
-          offset={[0, 4]}
-          style={{ width: "100%", borderRadius: 12 }}
-          containerStyle={{
-            width: "60%",
-            alignSelf: "center",
-            marginBottom: 30,
-          }}
-        >
-          <TouchableOpacity
-            style={s.btnSair}
-            onPress={lidarComLogout}
-            activeOpacity={0.85}
-          >
-            <Text style={s.btnSairTexto}>Sair da conta</Text>
-            <MaterialIcons name="logout" size={20} color="#fff" />
-          </TouchableOpacity>
-        </Shadow>
-      </View>
+function BotaoCardapio({ onPress }: BotaoCardapioProps) {
+  return (
+    <Shadow
+      distance={1}
+      startColor="#1d5807"
+      offset={[6, 8]}
+      style={{ width: "100%", borderRadius: 12 }}
+      containerStyle={{ width: "100%" }}
+    >
+      <TouchableOpacity
+        style={s.btnBranco}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <Text style={s.btnBrancoTexto}>Cardápio Semanal</Text>
+      </TouchableOpacity>
+    </Shadow>
+  );
+}
 
-      {/* ── Rodapé Branco ── */}
-      <View style={s.rodapeBranco}>
-        <Image
-          source={require("../../assets/images/logo-ifrs.png")}
-          style={s.logoFooter}
-          resizeMode="contain"
-        />
-        <Text style={s.textoRodape}>
-          Análise e Desenvolvimento de Sistemas{" "}
-          <Text style={{ color: VERDE_MID }}>2026</Text>
-        </Text>
-      </View>
+interface BotaoCadastroProps {
+  onPress: () => void;
+}
+
+function BotaoCadastro({ onPress }: BotaoCadastroProps) {
+  return (
+    <Shadow
+      distance={1}
+      startColor="#1d5807"
+      offset={[6, 30]}
+      style={{ width: "100%", borderRadius: 12, marginTop: 20 }}
+      containerStyle={{ width: "100%" }}
+    >
+      <TouchableOpacity
+        style={s.btnBranco}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <Text style={s.btnBrancoTexto}>Cadastrar Refeição</Text>
+      </TouchableOpacity>
+    </Shadow>
+  );
+}
+
+interface BotaoSairProps {
+  onPress: () => void;
+}
+
+function BotaoSair({ onPress }: BotaoSairProps) {
+  return (
+    <Shadow
+      distance={1}
+      startColor="#00000040"
+      offset={[0, 4]}
+      style={{ width: "100%", borderRadius: 12 }}
+      containerStyle={{
+        width: "60%",
+        alignSelf: "center",
+        marginBottom: 30,
+      }}
+    >
+      <TouchableOpacity
+        style={s.btnSair}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <Text style={s.btnSairTexto}>Sair da conta</Text>
+        <MaterialIcons name="logout" size={20} color={COLORS.branco} />
+      </TouchableOpacity>
+    </Shadow>
+  );
+}
+
+interface RodapeProps {}
+
+function Rodape({}: RodapeProps) {
+  return (
+    <View style={s.rodapeBranco}>
+      <Image
+        source={require("../../assets/images/logo-ifrs.png")}
+        style={s.logoFooter}
+        resizeMode="contain"
+      />
+      <Text style={s.textoRodape}>
+        Análise e Desenvolvimento de Sistemas{" "}
+        <Text style={{ color: COLORS.verde_mid }}>2026</Text>
+      </Text>
     </View>
   );
 }
 
 // ──────────────────────────────────────────────
-// Estilos
+// TELA PRINCIPAL
+// ──────────────────────────────────────────────
+export default function MenuScreen() {
+  const router = useRouter();
+  const { logout, user } = useAuth();
+
+  const nome = useMemo(() => extrairPrimeiroNome(user as Usuario | null), [user]);
+
+  const isServidor = useMemo(() => {
+    return user && (user as Usuario).role === "SERVIDOR";
+  }, [user]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    router.replace("/");
+  }, [logout, router]);
+
+  const handleCardapio = useCallback(() => {
+    router.push("/(tabs)/cardapio");
+  }, [router]);
+
+  const handleCadastro = useCallback(() => {
+    router.push("/(tabs)/cadastroRefeicao");
+  }, [router]);
+
+  return (
+    <View style={s.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.branco} />
+
+      {/* Topo Branco */}
+      <Topo />
+
+      {/* Área Verde Central */}
+      <View style={s.areaVerde}>
+        <Saudacao nome={nome} />
+
+        {/* Botões de Serviço */}
+        <View style={s.areaServicos}>
+          <BotaoCardapio onPress={handleCardapio} />
+
+          {isServidor && <BotaoCadastro onPress={handleCadastro} />}
+        </View>
+
+        {/* Botão Sair */}
+        <BotaoSair onPress={handleLogout} />
+      </View>
+
+      {/* Rodapé Branco */}
+      <Rodape />
+    </View>
+  );
+}
+
+// ──────────────────────────────────────────────
+// ESTILOS
 // ──────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: VERDE_MID,
+    backgroundColor: COLORS.verde_mid,
   },
   topoBranco: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.branco,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -133,7 +252,7 @@ const s = StyleSheet.create({
   headerTitle: {
     fontSize: 42,
     fontFamily: "InterBlack",
-    color: VERDE_DARK,
+    color: COLORS.verde_dark,
     lineHeight: 34,
     letterSpacing: -0.5,
   },
@@ -148,7 +267,7 @@ const s = StyleSheet.create({
   saudacao: {
     fontSize: 32,
     fontFamily: "InterBold",
-    color: "#fff",
+    color: COLORS.branco,
     lineHeight: 32,
     marginTop: 30,
   },
@@ -158,7 +277,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   btnBranco: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.branco,
     width: "100%",
     paddingVertical: 18,
     borderRadius: 12,
@@ -168,10 +287,10 @@ const s = StyleSheet.create({
   btnBrancoTexto: {
     fontSize: 18,
     fontFamily: "InterSemiBold",
-    color: TEXTO_FORTE,
+    color: COLORS.texto_forte,
   },
   btnSair: {
-    backgroundColor: VERMELHO,
+    backgroundColor: COLORS.vermelho,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -181,12 +300,12 @@ const s = StyleSheet.create({
     gap: 10,
   },
   btnSairTexto: {
-    color: "#fff",
+    color: COLORS.branco,
     fontSize: 18,
     fontFamily: "InterSemiBold",
   },
   rodapeBranco: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.branco,
     alignItems: "center",
     paddingTop: 20,
     paddingBottom: 30,

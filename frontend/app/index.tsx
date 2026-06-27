@@ -35,6 +35,7 @@ export default function LoginScreen() {
     try {
       await login(email, password);
     } catch (error: any) {
+      console.log("ERRO REAL:", error);
       alert("Usuário ou senha incorretos.");
     }
   };

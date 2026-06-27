@@ -3,8 +3,8 @@ import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface User {
-  login: string;
-  tipo: 'aluno' | 'servidor';
+  email: string;
+  role: 'ALUNO' | 'SERVIDOR';
 }
 
 interface AuthContextData {
