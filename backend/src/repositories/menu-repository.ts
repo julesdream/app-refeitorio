@@ -117,6 +117,54 @@ export class MenuRepository implements IMenuRepository {
     }
   }
 
+  async findByInterval(
+    initialDate: Date,
+    endDate: Date,
+  ): Promise<Result<MenuResponseDTO[]>> {
+    try {
+      const menus = await prisma.menu.findMany({
+        where: {
+          date: {
+            gte: initialDate,
+            lte: endDate,
+          },
+        },
+        include: {
+          meals: {
+            include: {
+              items: {
+                include: {
+                  food: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          date: "asc",
+        },
+      });
+
+      const result: MenuResponseDTO[] = menus.map((menu) => ({
+        ...menu,
+        meals: menu.meals.map((meal) => ({
+          type: meal.type,
+          foods: meal.items.map((item) => item.food),
+        })),
+      }));
+
+      return {
+        ok: true,
+        body: result,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: parseDatabaseErrorMessage(error, "Menu"),
+      };
+    }
+  }
+
   async create(date: Date): Promise<Result<Menu>> {
     try {
       const menu = await prisma.menu.create({ data: { date } });

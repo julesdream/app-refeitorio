@@ -6,6 +6,10 @@ export interface IMenuRepository {
   findAll(): Promise<Result<MenuResponseDTO[]>>;
   findById(id: number): Promise<Result<MenuResponseDTO | null>>;
   findByDate(date: Date): Promise<Result<MenuResponseDTO | null>>;
+  findByInterval(
+    initialDate: Date,
+    endDate: Date,
+  ): Promise<Result<MenuResponseDTO[]>>;
   create(date: Date): Promise<Result<Menu>>;
   update(id: number, menu: Menu): Promise<Result<Menu>>;
   delete(id: number): Promise<Result<void>>;
@@ -14,6 +18,10 @@ export interface IMenuRepository {
 export interface IMenuController {
   getAllMenus(): Promise<HttpResponse<MenuResponseDTO[]>>;
   getMenuById(id: number): Promise<HttpResponse<MenuResponseDTO | null>>;
+  getMenusByInterval(
+    initialDate: string,
+    endDate: string,
+  ): Promise<HttpResponse<MenuResponseDTO[]>>;
   createMenu(menu: MenuDTO): Promise<HttpResponse<Menu>>;
   updateMenu(id: number, menu: Partial<MenuDTO>): Promise<HttpResponse<Menu>>;
   deleteMenu(id: number): Promise<HttpResponse<void>>;
