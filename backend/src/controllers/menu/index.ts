@@ -18,6 +18,24 @@ export class MenuController implements IMenuController {
     this._menuRepository = new MenuRepository();
     this._menuService = new MenuService(this._menuRepository);
   }
+
+  async getMenusByInterval(
+    initialDate: string,
+    endDate: string,
+  ): Promise<HttpResponse<MenuResponseDTO[]>> {
+    const parsedInitialDate = new Date(initialDate as string);
+
+    const parsedEndDate = new Date(endDate as string);
+    parsedEndDate.setUTCHours(23, 59, 59, 999);
+
+    const result = await this._menuRepository.findByInterval(
+      parsedInitialDate,
+      parsedEndDate,
+    );
+
+    return toHttpResponse(result);
+  }
+
   async getAllMenus(): Promise<HttpResponse<MenuResponseDTO[]>> {
     const result = await this._menuRepository.findAll();
 
