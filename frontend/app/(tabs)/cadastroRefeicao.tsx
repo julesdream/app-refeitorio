@@ -21,6 +21,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 
 // ──────────────────────────────────────────────
 // CONSTANTS
+
 // ──────────────────────────────────────────────
 const COLORS = {
   verde_dark: "#1e6e24",
@@ -203,28 +204,36 @@ function AdicionadorItem({
   onAdicionarItem,
   loadingFoods,
 }: AdicionadorItemProps) {
+  const data = foods.map((food) => ({
+    label: food.name,
+    value: food.id,
+  }));
+
   return (
     <>
       <Text style={s.label}>Item do Cardápio</Text>
+
       <View style={s.row}>
-        <View style={[s.pickerContainer, { flex: 1, marginBottom: 0 }]}>
+        <View style={[s.pickerContainer, { flex: 1 }]}>
           <Picker
             selectedValue={foodSelecionado}
-            onValueChange={(value) =>
-              onFoodChange(value === "" ? null : Number(value))
-            }
+            onValueChange={onFoodChange}
+            enabled={!loadingFoods}
             style={s.picker}
-            enabled={!loadingFoods && foods.length > 0}
           >
-            <Picker.Item
-              label={loadingFoods ? "Carregando itens..." : "Selecione um item"}
-              value=""
-            />
+            <Picker.Item label="Selecione um item" value={null} />
+
             {foods.map((food) => (
-              <Picker.Item key={food.id} label={food.name} value={food.id} />
+              <Picker.Item
+                key={food.id}
+                style={s.pickerItem}
+                label={food.name}
+                value={food.id}
+              />
             ))}
           </Picker>
         </View>
+
         <TouchableOpacity
           style={s.addButton}
           onPress={onAdicionarItem}
@@ -332,13 +341,11 @@ export default function CadastroRefeicao() {
   const [loadingFoods, setLoadingFoods] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Carregar lista de foods cadastrados
   React.useEffect(() => {
     let ativo = true;
     (async () => {
       try {
         const { data } = await api.get<Food[]>("/foods");
-        console.log(data);
         if (ativo) {
           setFoods(data);
         }
@@ -366,7 +373,6 @@ export default function CadastroRefeicao() {
     [foods],
   );
 
-  // Verificar acesso
   React.useEffect(() => {
     const usuarioValido = user && (user as Usuario).role === "SERVIDOR";
 
@@ -487,47 +493,19 @@ export default function CadastroRefeicao() {
   }, [itensPorRefeicao, totalItens, date]);
 
   const handleVoltar = useCallback(() => {
-    if (totalItens > 0) {
-      Alert.alert(
-        "Descartar Alterações?",
-        "Você tem itens não salvos. Deseja voltar mesmo assim?",
-        [
-          { text: "Cancelar", onPress: () => {} },
-          {
-            text: "Voltar",
-            onPress: () => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace("/(tabs)/menu");
-              }
-            },
-          },
-        ],
-      );
-    } else {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(tabs)/menu");
-      }
-    }
+    router.replace("/(tabs)/menu");
   }, [router, totalItens]);
 
-  // Bloquear acesso não autorizados
   if (!user || (user as Usuario).role !== "SERVIDOR") {
     return null;
   }
 
   return (
     <View style={s.container}>
-      {/* Header com Botão de Voltar */}
       <HeaderCadastro onVoltar={handleVoltar} />
 
-      {/* Título */}
       <Text style={s.title}>Cadastro de Refeição</Text>
 
-      {/* Card com Formulário */}
       <Shadow
         distance={1}
         startColor="#00000015"
@@ -573,7 +551,6 @@ export default function CadastroRefeicao() {
         </View>
       </Shadow>
 
-      {/* Rodapé */}
       <Rodape />
     </View>
   );
@@ -646,6 +623,27 @@ const s = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 4,
     marginBottom: 12,
+  },
+  pickerContainer: {
+    backgroundColor: COLORS.bg_light,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.texto_forte,
+    marginBottom: 12,
+    justifyContent: "center",
+  },
+  picker: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    width: "100%",
+    color: COLORS.texto_forte,
+  },
+  pickerItem: {
+    padding: 2,
   },
   tabItem: {
     flex: 1,

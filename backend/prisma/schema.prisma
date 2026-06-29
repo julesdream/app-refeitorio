@@ -59,8 +59,6 @@ model MealItem {
 model Food {
   id Int @id @default(autoincrement())
   name String
-  type  String
-  date  String
 
   mealItems MealItem[]
 }

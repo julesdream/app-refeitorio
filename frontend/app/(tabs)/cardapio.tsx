@@ -56,29 +56,51 @@ const DIAS_SEMANA = [
   "Sábado",
 ] as const;
 
-const TIPO_REFEICAO = {
+// Tipos como vêm da API
+const TIPO_REFEICAO_API = {
+  cafe: "CAFE",
+  almoco: "ALMOCO",
+  janta: "JANTAR",
+} as const;
+
+// Labels de exibição
+const TIPO_REFEICAO_LABEL = {
+  cafe: "Café da Manhã",
   almoco: "Almoço",
   janta: "Jantar",
 } as const;
 
+const ORDEM_REFEICOES: TipoRefeicao[] = ["cafe", "almoco", "janta"];
+
 // ──────────────────────────────────────────────
 // TYPES
 // ──────────────────────────────────────────────
-type TipoRefeicao = keyof typeof TIPO_REFEICAO;
+type TipoRefeicao = keyof typeof TIPO_REFEICAO_API;
 
 interface CardapioDia {
   diaSemana: string;
   nomeCurto: string;
-  data: string;
+  data: string; // YYYY-MM-DD
   dataFormatada: string;
+  cafe: string[];
   almoco: string[];
   janta: string[];
 }
 
-interface APIFoodItem {
-  date: string;
-  type: "Almoço" | "Jantar";
+interface APIFood {
+  id: number;
   name: string;
+}
+
+interface APIMeal {
+  type: "CAFE" | "ALMOCO" | "JANTAR";
+  foods: APIFood[];
+}
+
+interface APIMenu {
+  id: number;
+  date: string; // ISO, ex: "2026-06-15T00:00:00.000Z"
+  meals: APIMeal[];
 }
 
 // ──────────────────────────────────────────────
@@ -121,56 +143,90 @@ function useFavoritoRefeicao(diaSemana: string, tipo: TipoRefeicao) {
 // ──────────────────────────────────────────────
 // UTILITY FUNCTIONS
 // ──────────────────────────────────────────────
-function parseDataParaDate(dataStr: string): Date {
-  const [dia, mes, ano] = dataStr.split("/").map(Number);
-  return new Date(ano, mes - 1, dia);
-}
 
-function formatarDataISO(date: Date) {
+// Formata uma Date local para "YYYY-MM-DD".
+function formatarDataISO(date: Date): string {
   const ano = date.getFullYear();
   const mes = String(date.getMonth() + 1).padStart(2, "0");
   const dia = String(date.getDate()).padStart(2, "0");
-
   return `${ano}-${mes}-${dia}`;
 }
 
-function obterHojeISO(): string {
-  return formatarDataISO(new Date());
+// A API retorna a data como ISO em UTC meia-noite (ex: "2026-06-15T00:00:00.000Z").
+// Pegamos só a parte "YYYY-MM-DD" direto da string, sem converter fuso,
+// pra não correr o risco de "voltar" um dia.
+function extrairDataISO(dataApi: string): string {
+  return dataApi.slice(0, 10);
 }
 
-function agruparCardapiosPorDia(
-  items: APIFoodItem[],
-): Record<string, CardapioDia> {
-  return items.reduce(
-    (acc, item) => {
-      const data = parseDataParaDate(item.date);
-      const key = formatarDataISO(data);
-      const diaIndex = data.getDay();
+// Cria uma Date local a partir de "YYYY-MM-DD" (evita o bug de fuso do
+// `new Date("YYYY-MM-DD")`, que o JS interpreta como UTC).
+function dataLocalDeISO(dataISO: string): Date {
+  const [ano, mes, dia] = dataISO.split("-").map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
+function formatarDataBR(dataISO: string): string {
+  return dataLocalDeISO(dataISO).toLocaleDateString("pt-BR");
+}
+
+// Retorna a Segunda e a Sexta-feira da semana corrente (baseado em "hoje").
+// Funciona mesmo se hoje for sábado ou domingo (calcula a semana em curso).
+function obterIntervaloSemanaAtual(): { inicio: Date; fim: Date } {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const diaSemana = hoje.getDay(); // 0 = Domingo, 1 = Segunda, ... 6 = Sábado
+  const diffParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+
+  const segunda = new Date(hoje);
+  segunda.setDate(hoje.getDate() - diffParaSegunda);
+
+  const sexta = new Date(segunda);
+  sexta.setDate(segunda.getDate() + 4);
+
+  return { inicio: segunda, fim: sexta };
+}
+
+// Monta a lista de CardapioDia só com os dias que a API de fato retornou
+// (ou seja, dias com cardápio cadastrado), ordenados por data.
+function mapearMenusParaDias(menus: APIMenu[]): CardapioDia[] {
+  return menus
+    .map((menu) => {
+      const dataISO = extrairDataISO(menu.date);
+      const dataDate = dataLocalDeISO(dataISO);
+      const diaIndex = dataDate.getDay();
       const nomeDia = DIAS_SEMANA[diaIndex];
-      const diaSemanaCompleto = `${nomeDia === "Domingo" || nomeDia === "Sábado" 
-        ? nomeDia : `${nomeDia}-feira`}`;
+      const diaSemanaCompleto =
+        nomeDia === "Domingo" || nomeDia === "Sábado"
+          ? nomeDia
+          : `${nomeDia}-feira`;
 
-      if (!acc[key]) {
-        acc[key] = {
-          diaSemana: diaSemanaCompleto,
-          nomeCurto: nomeDia,
-          data: key,
-          dataFormatada: data.toLocaleDateString("pt-BR"),
-          almoco: [],
-          janta: [],
-        };
-      }
+      const dia: CardapioDia = {
+        diaSemana: diaSemanaCompleto,
+        nomeCurto: nomeDia,
+        data: dataISO,
+        dataFormatada: dataDate.toLocaleDateString("pt-BR"),
+        cafe: [],
+        almoco: [],
+        janta: [],
+      };
 
-      if (item.type === TIPO_REFEICAO.almoco) {
-        acc[key].almoco.push(item.name);
-      } else if (item.type === TIPO_REFEICAO.janta) {
-        acc[key].janta.push(item.name);
-      }
+      menu.meals.forEach((meal) => {
+        const nomes = meal.foods.map((food) => food.name);
 
-      return acc;
-    },
-    {} as Record<string, CardapioDia>,
-  );
+        if (meal.type === TIPO_REFEICAO_API.cafe) {
+          dia.cafe = nomes;
+        } else if (meal.type === TIPO_REFEICAO_API.almoco) {
+          dia.almoco = nomes;
+        } else if (meal.type === TIPO_REFEICAO_API.janta) {
+          dia.janta = nomes;
+        }
+      });
+
+      return dia;
+    })
+    .sort((a, b) => a.data.localeCompare(b.data));
 }
 
 // ──────────────────────────────────────────────
@@ -196,9 +252,11 @@ function RefeicaoItem({
 
   const handleCompartilhar = useCallback(async () => {
     try {
-      const lista = itens.map((item) => `• ${item}`).join("\n");
+      const lista = itens.length
+        ? itens.map((item) => `• ${item}`).join("\n")
+        : "Sem itens cadastrados";
       await Share.share({
-        message: `🍽️ ${TIPO_REFEICAO[tipo]} - ${diaSemana}\n\n${lista}`,
+        message: `🍽️ ${TIPO_REFEICAO_LABEL[tipo]} - ${diaSemana}\n\n${lista}`,
       });
     } catch (error) {
       console.error("Erro ao compartilhar:", error);
@@ -213,7 +271,7 @@ function RefeicaoItem({
   return (
     <>
       <Text style={[tituloStyle, tituloColor && { color: tituloColor }]}>
-        {TIPO_REFEICAO[tipo]}
+        {TIPO_REFEICAO_LABEL[tipo]}
       </Text>
       <View style={s.refeicaoRow}>
         {isLeft && (
@@ -246,6 +304,14 @@ function RefeicaoItem({
 }
 
 function renderItens(itens: string[], style: StyleProp<TextStyle>) {
+  if (itens.length === 0) {
+    return (
+      <Text style={[style, { color: COLORS.cinza_inativo }]}>
+        Sem itens
+      </Text>
+    );
+  }
+
   return itens.map((item, i) => (
     <Text key={`${item}-${i}`} style={style}>
       {item}
@@ -260,24 +326,22 @@ interface CardDiaProps {
 }
 
 function CardDia({ dia, width, isHoje }: CardDiaProps) {
-
-  
   return (
     <View style={{ width, marginRight: CARD_GAP_MOB }}>
       {/* Título com Badge "HOJE" */}
       <View style={s.tituloDiaColumn}>
-  <View style={s.tituloDiaRow}>
-    <Text style={[s.diaTituloExtenso, isHoje && s.diaTituloExtensoHoje]}>
-      {dia.diaSemana}
-    </Text>
-    {isHoje && (
-      <View style={s.badgeHoje}>
-        <Text style={s.badgeHojeTexto}>HOJE</Text>
+        <View style={s.tituloDiaRow}>
+          <Text style={[s.diaTituloExtenso, isHoje && s.diaTituloExtensoHoje]}>
+            {dia.diaSemana}
+          </Text>
+          {isHoje && (
+            <View style={s.badgeHoje}>
+              <Text style={s.badgeHojeTexto}>HOJE</Text>
+            </View>
+          )}
+        </View>
+        <Text style={s.dataSubtitulo}>{dia.dataFormatada}</Text>
       </View>
-    )}
-  </View>
-  <Text style={s.dataSubtitulo}>{dia.dataFormatada}</Text>
-</View>
 
       <Shadow
         distance={isHoje ? 2 : 6}
@@ -287,16 +351,26 @@ function CardDia({ dia, width, isHoje }: CardDiaProps) {
         containerStyle={{ width: "100%", marginBottom: 20 }}
       >
         <View style={[s.bigCard, isHoje && s.bigCardHoje]}>
+          {/* CAFÉ DA MANHÃ */}
+          <RefeicaoItem
+            itens={dia.cafe}
+            tipo="cafe"
+            diaSemana={dia.diaSemana}
+            isHoje={isHoje}
+            isLeft
+          />
+
+          <View style={s.linhaDivisoria} />
+
           {/* ALMOÇO */}
           <RefeicaoItem
             itens={dia.almoco}
             tipo="almoco"
             diaSemana={dia.diaSemana}
             isHoje={isHoje}
-            isLeft
+            isLeft={false}
           />
 
-          {/* Linha Divisória */}
           <View style={s.linhaDivisoria} />
 
           {/* JANTA */}
@@ -305,7 +379,7 @@ function CardDia({ dia, width, isHoje }: CardDiaProps) {
             tipo="janta"
             diaSemana={dia.diaSemana}
             isHoje={isHoje}
-            isLeft={false}
+            isLeft
           />
         </View>
       </Shadow>
@@ -352,7 +426,27 @@ export default function CardapioScreen() {
   const [cardapioSemana, setCardapioSemana] = useState<CardapioDia[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const hojeISO = useMemo(() => obterHojeISO(), []);
+  // Intervalo da semana atual (Segunda a Sexta), calculado uma única vez.
+  const { inicio: segundaAtual, fim: sextaAtual } = useMemo(
+    () => obterIntervaloSemanaAtual(),
+    [],
+  );
+  const initialDate = useMemo(
+    () => formatarDataISO(segundaAtual),
+    [segundaAtual],
+  );
+  const endDate = useMemo(() => formatarDataISO(sextaAtual), [sextaAtual]);
+
+  // Texto "Semana {dia inicial} - {dia final}" vem direto do intervalo
+  // pedido (Segunda a Sexta), não dos dados retornados pela API — assim
+  // o cabeçalho fica correto mesmo se algum dia não tiver cardápio.
+  const rangoData = useMemo(
+    () =>
+      `Semana ${segundaAtual.toLocaleDateString("pt-BR")} - ${sextaAtual.toLocaleDateString("pt-BR")}`,
+    [segundaAtual, sextaAtual],
+  );
+
+  const hojeISO = useMemo(() => formatarDataISO(new Date()), []);
   const diaAtual = useMemo(
     () => cardapioSemana.findIndex((d) => d.data === hojeISO),
     [cardapioSemana, hojeISO],
@@ -361,15 +455,17 @@ export default function CardapioScreen() {
   const CARD_W_MOB = useMemo(() => width - PADDING_H_MOB - CARD_PEEK, [width]);
   const SNAP_INTERVAL = useMemo(() => CARD_W_MOB + CARD_GAP_MOB, [CARD_W_MOB]);
 
-  // Carregar cardápio
+  // Carregar cardápio (Segunda a Sexta da semana atual)
   useEffect(() => {
     async function carregarCardapio() {
       try {
-        const res = await api.get<APIFoodItem[]>("/menus");
-        const grouped = agruparCardapiosPorDia(res.data);
-        const dias = Object.values(grouped).sort((a, b) =>
-          a.data.localeCompare(b.data),
-        );
+        const res = await api.get<APIMenu[]>("/menus", {
+          params: { initialDate, endDate },
+        });
+
+        // Mostra só os dias que de fato têm cardápio cadastrado na API,
+        // sem cards vazios pra dias sem registro.
+        const dias = mapearMenusParaDias(res.data);
 
         setCardapioSemana(dias);
       } catch (err) {
@@ -380,7 +476,7 @@ export default function CardapioScreen() {
     }
 
     carregarCardapio();
-  }, []);
+  }, [initialDate, endDate, segundaAtual, sextaAtual]);
 
   // Scroll automático para hoje
   useEffect(() => {
@@ -435,10 +531,6 @@ export default function CardapioScreen() {
       </View>
     );
   }
-
-  const primeiraData = cardapioSemana[0].dataFormatada;
-  const ultimaData = cardapioSemana[cardapioSemana.length - 1].dataFormatada;
-  const rangoData = `Semana ${primeiraData} - ${ultimaData}`;
 
   return (
     <View style={s.container}>
@@ -569,16 +661,16 @@ const s = StyleSheet.create({
     paddingHorizontal: PADDING_H_MOB,
     marginBottom: 20,
   },
- tituloDiaColumn: {
-  flexDirection: "column",
-  marginBottom: 14,
-  marginLeft: 10,
-  gap: 6,
-},
-dataSubtitulo: {
-  fontSize: 13,
-  fontFamily: "InterSemiBold",
-},
+  tituloDiaColumn: {
+    flexDirection: "column",
+    marginBottom: 14,
+    marginLeft: 10,
+    gap: 6,
+  },
+  dataSubtitulo: {
+    fontSize: 13,
+    fontFamily: "InterSemiBold",
+  },
   voltarBtn: {
     flexDirection: "row",
     alignItems: "center",
